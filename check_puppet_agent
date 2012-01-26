@@ -1,0 +1,94 @@
+#!/bin/bash
+# Nagios plugin to monitor Puppet agent state
+#
+# Copyright (c) 2011 Alexander Swen <a@swen.nu>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+#
+# Example configuration
+#
+# Typical this check is placed on a client and run via nrpe
+# so add this to nrpe.cfg:
+#  command[check_puppet_agent]=/usr/lib/nagios/plugins/check_puppet -w 3600 -c 7200
+# This should warn when the agent hasnt run for an hour and go critical after two hours
+#  if you have dont_blame_nrpe=1 set you can choose to
+#  command[check_puppet_agent]=/usr/lib/nagios/plugins/check_puppet -w $ARG1$ -c $ARG2$
+#
+# define service {
+#  use generic-service
+#  service_description Puppet agent
+#  check_command check_nrpe!check_puppet_agent
+# or
+#  check_command check_nrpe!check_puppet_agent!3600!7200 
+#}
+
+# CHANGELOG:
+# 20120126	A.Swen	created.
+
+# SETTINGS
+statefile=/var/lib/puppet/agent/state/last_run_summary.yaml
+
+# FUNCTIONS
+result () {
+  case $1 in
+    0) echo "OK: Puppet agent ${version} running catalogversion ${config}";rc=0 ;;
+    1) echo "UNKNOWN: last_run_summary.yaml not found or incomplete";rc=3 ;;
+    2) echo "WARNING: Last run was ${time_since_last} seconds ago. warn is ${WARN}";rc=1 ;;
+    3) echo "CRITICAL: Last run was ${time_since_last} seconds ago. crit is ${CRIT}";rc=2 ;;
+    4) echo "CRITICAL: Puppet daemon not running";rc=2 ;;
+    5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
+  esac
+  exit $rc
+}
+
+# SCRIPT
+if [ $# -lt 2 ];then
+  result 5
+else
+  WARN=$1
+  CRIT=$2
+fi
+
+# check if state file exists
+[ -s ${statefile} ] || result 1
+
+# check puppet daemon:
+[ "$(ps axf|egrep "/usr/bin/ruby /usr/sbin/puppetd|/usr/bin/ruby1.8 /usr/bin/puppet agent")" ] || result 4
+
+# check when last run happened
+line="$(grep last_run: ${statefile})"
+last_run=$(echo ${line/last_run:/})
+now=$(date +%s)
+time_since_last=$((now-last_run))
+[ ${time_since_last} -ge ${CRIT} ] && result 3
+[ ${time_since_last} -ge ${WARN} ] && result 2
+
+# get some more info from the yaml file
+line="$(grep config: ${statefile})"
+config=$(echo ${line/config:/})
+line="$(grep puppet: ${statefile})"
+version=$(echo ${line/puppet:/})
+line="$(grep failed: ${statefile})"
+failed=$(echo ${line/failed:/})
+line="$(grep failure: ${statefile})"
+failure=$(echo ${line/failure:/})
+line="$(grep failed_to_restart: ${statefile})"
+failed_to_restart=$(echo ${line/failed_to_restart:/})
+
+[ -z "${last_run}" -o -z "${config}" -o -z "${version}" -o -z "${failed}" -o -z "${failure}" -o -z "${failed_to_restart}" ] && result 1
+
+
+
+
+# END

@@ -88,7 +88,7 @@ failed_to_restart=$(echo ${line/failed_to_restart:/})
 
 [ -z "${last_run}" -o -z "${config}" -o -z "${version}" -o -z "${failed}" -o -z "${failure}" -o -z "${failed_to_restart}" ] && result 1
 
-
-
+# if we come here it works!
+result 0
 
 # END

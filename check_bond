@@ -1,0 +1,104 @@
+#!/bin/bash
+# Script to check eth interfaces bonding
+# L.Gill 10/08/06 - V.1.0
+# A.Swen 11/09/07 - V.1.1
+# ------------------------------------------
+# ########  Script Modifications  ##########
+# ------------------------------------------
+# Who    When      What
+# ---    ----      ----
+# A.Swen 2011-09-07	Add support for other bond module than bond0 (defaults to bond0 however)
+#
+#
+# SETTINGS
+# Defautl if is bond0
+if=bond0
+
+# commands
+CAT=/bin/cat
+GREP=/bin/grep
+EGREP=/bin/egrep
+AWK=/usr/bin/gawk
+FIND=/usr/bin/find
+SED=/bin/sed
+WC=/usr/bin/wc
+TAIL=/usr/bin/tail
+ECHO=/bin/echo
+LS=/bin/ls
+TR=/usr/bin/tr
+LSMOD=/sbin/lsmod
+
+# FUNCTIONS
+die () {
+  rc=$1
+  shift
+  echo "==========================">&2
+  echo "==== FATAL ERROR ====" >&2
+  echo "==========================">&2
+  echo "" >&2
+  echo $@ >&2
+  exit $rc
+}
+
+usage () {
+  echo "==========================" >&2
+  echo "==== USAGE ====" >&2
+  echo "==========================" >&2
+  echo "" >&2
+  echo "Usage: ${me} [-i <bond interface name>]" >&2
+  echo "" >&2
+  echo "if no option is given this script assumes it has to check bond0" >&2
+  echo "" >&2
+  echo "example: ${me} -i bond1" >&2
+  echo "" >&2
+  exit 1
+}
+
+cleanup () {
+  for tmpfile in ${BONDTMP} ${ETHLIST} ${ETHS} ${ETHDOWN};do
+    [ -n "${tempfile}" -a -f "${tmpfile}" ] && rm -f ${tmpfile}
+  done
+}
+
+get_options () {
+  [ $# -gt 0 ]||usage
+  while getopts "i:" opt;do
+    case ${opt} in
+      i) export if=`echo ${OPTARG}` ;;
+      *) usage;;
+    esac
+done
+}
+
+result () {
+  case $1 in
+    0) echo "OK: - Bondingmode: $(grep "Bonding Mode:" /proc/net/bonding/${if})" ;;
+    1) echo "UNKNOWN: plugin error" ;;
+    2) echo "WARNING: bonding module not loaded" ;;
+    3) echo "WARNING: state of ${if} device $2 is $3" ;;
+    4) echo "UNKNOWN: no bondinterface with name ${if} found" ;;
+  esac
+  cleanup
+  exit $1
+}
+
+# SCRIPT
+[ $# -eq 1 -o $# -gt 2 ] && usage
+[ $# -eq 2 ] && get_options $@
+
+# 1st we check if bonding module is loaded
+[ "$(${LSMOD}|grep bonding)" = "" ] && result 2
+
+# test if there is any bond interface with this name
+[ -f "/proc/net/bonding/${if}" ] || result 4
+
+# test state of each if in bond
+${GREP} "Slave Interface" /proc/net/bonding/${if} |awk '{print $3}'|while read ethdev;do
+  state=$(grep -A1 "Slave Interface: ${ethdev}" /proc/net/bonding/bond0|tail -1|awk '{print $3}')
+  [ "${state}" = "up" ]||result 3 ${ethdev} ${state}
+done
+
+# if we make it here we're ok
+result 0
+
+#END

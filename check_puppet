@@ -1,0 +1,41 @@
+#!/bin/bash
+# check_puppet
+# Dit script moet uitvinden of de puppet agent nog goed werkt op een server
+
+# daarvoor test het script:
+# - of de daemon nog draait
+# - in de file /var/lib/puppet/agent/state/last_run_summary.yaml:
+#  - of last_run niet langer dan ARG1 geleden is
+#  - of failed, failure en failed_to_restart niet groter dan 0 zijn
+
+# Alexander Swen
+# Private contact: alex@swen.nu, 06-21811135
+
+# CHANGELOG:
+# 20120126	A.Swen	created.
+
+# SETTINGS
+date=$(date +%Y%m%d)
+me=$(basename $0)
+mydir=$(dirname $0)
+statefile=/var/lib/puppet/agent/state/last_run_summary.yaml
+
+# FUNCTIONS
+result () {
+  case $1 in
+    0) echo "OK: - )" ;;
+    1) echo "UNKNOWN: last_run_summary.yaml not found" ;;
+    2) echo "WARNING: Last run was $((time_since_last/60)) minutes ago" ;;
+    4) echo "WARNING: failures during puppet run" ;;
+    4) echo "CRITICAL: Puppet daemon not running" ;;
+  esac
+  cleanup
+  exit $1
+}
+
+# SCRIPT
+
+# 1st we check if bonding module is loaded
+[ -s ${statefile} ] || result 1
+
+# END

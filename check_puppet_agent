@@ -48,6 +48,7 @@ result () {
     3) echo "CRITICAL: Last run was ${time_since_last} seconds ago. crit is ${CRIT}";rc=2 ;;
     4) echo "CRITICAL: Puppet daemon not running";rc=2 ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
+    6) echo "CRITICAL: Last run had 1 or more errors. Check the logs";rc=2 ;;
   esac
   exit $rc
 }
@@ -87,6 +88,7 @@ line="$(grep failed_to_restart: ${statefile})"
 failed_to_restart=$(echo ${line/failed_to_restart:/})
 
 [ -z "${last_run}" -o -z "${config}" -o -z "${version}" -o -z "${failed}" -o -z "${failure}" -o -z "${failed_to_restart}" ] && result 1
+[ ${failed} -gt 0 -o  ${failure} -gt 0 -o ${failed_to_restart} -gt 0 ] && result 6
 
 # if we come here it works!
 result 0

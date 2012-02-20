@@ -34,10 +34,14 @@
 #}
 
 # CHANGELOG:
-# 20120126	A.Swen	created.
+# 20120126	A.Swen	    created.
+# 20120214  trey85stang Modified, added getopts, usage, defaults
+# 20120220  A.Swen      Statefile can be overriden
 
 # SETTINGS
-statefile=/var/lib/puppet/agent/state/last_run_summary.yaml
+CRIT=7200
+WARN=3600
+statefile=/var/lib/puppet/state/last_run_summary.yaml
 
 # FUNCTIONS
 result () {
@@ -53,18 +57,48 @@ result () {
   exit $rc
 }
 
-# SCRIPT
-if [ $# -lt 2 ];then
-  result 5
-else
-  WARN=$1
-  CRIT=$2
-fi
+usage () {
+  echo ""
+  echo "USAGE: "
+  echo "  $0 [-w 3600] [-c 7200] [-s statefile]"
+  echo "    -w warning threshold (default 3600 seconds)"
+  echo "    -c ciritcal threshold (default 7200 seconds)"
+  echo "    -s statefile (default: /var/lib/puppet/state/last_run_summary.yaml)"
+  echo ""
+  exit 1
+}
+
+while getopts "c:s:w:" opt
+do
+  case $opt in
+    c)
+      if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
+      then
+        CRIT=$OPTARG
+      else
+        usage
+      fi
+    ;;
+    s) statefile=${OPTARG} ;;
+    w)
+      if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
+      then
+        WARN=$OPTARG
+      else
+        usage
+      fi
+    ;;
+    *)
+      usage
+    ;;
+  esac
+done
 
 # check if state file exists
 [ -s ${statefile} ] || result 1
 
 # check puppet daemon:
+# I only know the cmd lines for Debian and CentOS/RedHat:
 [ "$(ps axf|egrep "/usr/bin/ruby /usr/sbin/puppetd|/usr/bin/ruby1.8 /usr/bin/puppet agent")" ] || result 4
 
 # check when last run happened

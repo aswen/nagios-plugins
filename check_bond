@@ -94,7 +94,7 @@ result () {
 
 # test state of each if in bond
 ${GREP} "Slave Interface" /proc/net/bonding/${if} |awk '{print $3}'|while read ethdev;do
-  state=$(grep -A1 "Slave Interface: ${ethdev}" /proc/net/bonding/bond0|tail -1|awk '{print $3}')
+  state=$(grep -A1 "Slave Interface: ${ethdev}" /proc/net/bonding/${if}|tail -1|awk '{print $3}')
   [ "${state}" = "up" ]||result 3 ${ethdev} ${state}
 done
 

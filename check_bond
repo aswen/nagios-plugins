@@ -72,14 +72,14 @@ done
 
 result () {
   case $1 in
-    0) echo "OK: - Bondingmode: $(grep "Bonding Mode:" /proc/net/bonding/${if})" ;;
-    1) echo "UNKNOWN: plugin error" ;;
-    2) echo "WARNING: bonding module not loaded" ;;
-    3) echo "WARNING: state of ${if} device $2 is $3" ;;
-    4) echo "UNKNOWN: no bondinterface with name ${if} found" ;;
+    0) echo "OK: - Bondingmode: $(grep "Bonding Mode:" /proc/net/bonding/${if})";rc=0 ;;
+    1) echo "UNKNOWN: plugin error";rc=3;;
+    2) echo "CRITICAL: bonding module not loaded";rc=2;;
+    3) echo "WARNING: state of ${if} device $2 is $3";rc=1;;
+    4) echo "UNKNOWN: no bondinterface with name ${if} found";rc=3;;
   esac
   cleanup
-  exit $1
+  exit $rc
 }
 
 # SCRIPT

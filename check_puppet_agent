@@ -41,13 +41,13 @@
 # SETTINGS
 CRIT=7200
 WARN=3600
-statefile=/var/lib/puppet/state/last_run_summary.yaml
+statefile=$(/usr/bin/puppet --configprint statedir)/last_run_summary.yaml
 
 # FUNCTIONS
 result () {
   case $1 in
     0) echo "OK: Puppet agent ${version} running catalogversion ${config}";rc=0 ;;
-    1) echo "UNKNOWN: last_run_summary.yaml not found or incomplete";rc=3 ;;
+    1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete";rc=3 ;;
     2) echo "WARNING: Last run was ${time_since_last} seconds ago. warn is ${WARN}";rc=1 ;;
     3) echo "CRITICAL: Last run was ${time_since_last} seconds ago. crit is ${CRIT}";rc=2 ;;
     4) echo "CRITICAL: Puppet daemon not running";rc=2 ;;
@@ -95,7 +95,7 @@ do
 done
 
 # check if state file exists
-[ -s ${statefile} ] || result 1
+[ -s ${statefile} -a -r ${statefile} ] || result 1
 
 # check puppet daemon:
 # I only know the cmd lines for Debian and CentOS/RedHat:

@@ -41,7 +41,22 @@
 # SETTINGS
 CRIT=7200
 WARN=3600
-statefile=$(/usr/bin/puppet --configprint statedir)/last_run_summary.yaml
+
+version=$(puppet -V)
+case $version in
+   2.*)
+      statedir=$(puppet --configprint statedir)
+      ;;
+   3.*)
+      statedir=$(puppet config print statedir)
+      ;;
+   *)
+      echo "Sorry, puppet version ${version} is unsupported by $0"
+      exit 1
+      ;;
+esac
+
+statefile=${statedir}/last_run_summary.yaml
 
 # FUNCTIONS
 result () {
@@ -112,8 +127,6 @@ time_since_last=$((now-last_run))
 # get some more info from the yaml file
 line="$(grep config: ${statefile})"
 config=$(echo ${line/config:/})
-line="$(grep puppet: ${statefile})"
-version=$(echo ${line/puppet:/})
 line="$(grep failed: ${statefile})"
 failed=$(echo ${line/failed:/})
 line="$(grep failure: ${statefile})"

@@ -138,6 +138,7 @@ if [ ${daemonized} -eq 1 ];then
   [ -f ${pidfile} ]&&pid=$(cat ${pidfile})||result 4
   # see if the process is running
   sudo kill -0 ${pid} ||result 4
+  # test if the pid we found in the pidfile is puppet:
   grep -q puppet /proc/${pid}/cmdline ||result 4
 fi
 

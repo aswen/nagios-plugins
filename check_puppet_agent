@@ -56,6 +56,8 @@
 #                       - Puppet --configprint => puppet config print (version 3 has new way of printing config)
 #                       - Added new pattern to search for process
 #                       - Added test kill -0 to see if process is still there
+# 20130725  A.Swen      Based on feedback Михайло Масик updated a test (removed ! from test)
+# 20130725  A.Swen      Added sudo to puppet config print pidfile.
 
 # SETTINGS
 CRIT=7200
@@ -133,7 +135,7 @@ if [ ${daemonized} -eq 1 ];then
   # I only know the cmd lines for Debian and CentOS/RedHat:
   [ "$(ps axf|egrep "/usr/bin/ruby /usr/sbin/puppetd|/usr/bin/ruby1.8 /usr/bin/puppet agent|/usr/bin/ruby /usr/bin/puppet agent"|grep -v grep)" ] || result 4
   default_pidfile=/var/run/puppet/agent.pid
-  [ ! -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$(puppet config print pidfile)
+  [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$(sudo /usr/bin/puppet config print pidfile)
   # if there is a pidfile tell me the pid, else fail
   [ -f ${pidfile} ]&&pid=$(cat ${pidfile})||result 4
   # see if the process is running

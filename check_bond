@@ -1,8 +1,46 @@
 #!/bin/bash
-# Script to check eth interfaces bonding
-# L.Gill 10/08/06 - V.1.0
-# A.Swen 11/09/07 - V.1.1
-# A.Swen 13/10/11 - V.1.2
+# Nagios plugin to monitor Nic Bonding state
+#
+# Based on check_bond.sh written by L.Gill 10/08/06 - V.1.0 as found on
+# http://exchange.nagios.org/directory/Plugins/Operating-Systems/Linux/check-network-bonding/details
+
+# currently I maintain my own version at https://github.com/aswen/nagios-plugins/blob/master/check_bond
+# Copyright (c) 2010 L.Gill
+# Copyright (c) 2011 Alexander Swen <a@swen.nu>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+#
+# Example configuration
+#
+# Typical this check is placed on a client and runs via nrpe
+# So add this to nrpe.cfg:
+#  command[check_bond]=/usr/lib/nagios/plugins/check_bond
+# This should warn when one of the slaves is down and go critical when the whole bond is not available.
+# This plugin defaults to bond0. If you have multiple bonds you can tell the script so by adding -i <if>.
+
+#  if you have dont_blame_nrpe=1 set you can choose to
+#  command[check_bond]=/usr/lib/nagios/plugins/check_bond -i $ARG1$
+#
+# define service {
+#  use generic-service
+#  service_description Bond state
+#  check_command check_nrpe!check_bond
+# or
+#  check_command check_nrpe!check_bond!bond1
+#}
+#
+
 # ------------------------------------------
 # ########  Script Modifications  ##########
 # ------------------------------------------
@@ -13,7 +51,7 @@
 #
 #
 # SETTINGS
-# Defautl if is bond0
+# Default if is bond0
 if=bond0
 
 # commands

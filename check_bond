@@ -2,12 +2,14 @@
 # Script to check eth interfaces bonding
 # L.Gill 10/08/06 - V.1.0
 # A.Swen 11/09/07 - V.1.1
+# A.Swen 13/10/11 - V.1.2
 # ------------------------------------------
 # ########  Script Modifications  ##########
 # ------------------------------------------
 # Who    When      What
 # ---    ----      ----
-# A.Swen 2011-09-07	Add support for other bond module than bond0 (defaults to bond0 however)
+# A.Swen 2011-09-07 Add support for other bond module than bond0 (defaults to bond0 however)
+# A.Swen 2013-10-11 Remove some obsolete stuff and make the script shorter
 #
 #
 # SETTINGS
@@ -15,90 +17,67 @@
 if=bond0
 
 # commands
-CAT=/bin/cat
 GREP=/bin/grep
-EGREP=/bin/egrep
 AWK=/usr/bin/gawk
-FIND=/usr/bin/find
-SED=/bin/sed
-WC=/usr/bin/wc
-TAIL=/usr/bin/tail
-ECHO=/bin/echo
-LS=/bin/ls
-TR=/usr/bin/tr
 LSMOD=/sbin/lsmod
 
 # FUNCTIONS
-die () {
-  rc=$1
-  shift
-  echo "==========================">&2
-  echo "==== FATAL ERROR ====" >&2
-  echo "==========================">&2
-  echo "" >&2
-  echo $@ >&2
-  exit $rc
-}
-
-usage () {
-  echo "==========================" >&2
-  echo "==== USAGE ====" >&2
-  echo "==========================" >&2
-  echo "" >&2
-  echo "Usage: ${me} [-i <bond interface name>]" >&2
-  echo "" >&2
-  echo "if no option is given this script assumes it has to check bond0" >&2
-  echo "" >&2
-  echo "example: ${me} -i bond1" >&2
-  echo "" >&2
-  exit 1
-}
-
-cleanup () {
-  for tmpfile in ${BONDTMP} ${ETHLIST} ${ETHS} ${ETHDOWN};do
-    [ -n "${tempfile}" -a -f "${tmpfile}" ] && rm -f ${tmpfile}
-  done
-}
-
 get_options () {
   [ $# -gt 0 ]||usage
   while getopts "i:" opt;do
     case ${opt} in
       i) export if=`echo ${OPTARG}` ;;
-      *) usage;;
+      *) result 5;;
     esac
 done
 }
 
 result () {
   case $1 in
-    0) echo "OK: - Bondingmode: $(grep "Bonding Mode:" /proc/net/bonding/${if})";rc=0 ;;
+    0) echo "OK: - Bondingmode: $(grep "Bonding Mode:" /proc/net/bonding/${if})";;
     1) echo "UNKNOWN: plugin error";rc=3;;
     2) echo "CRITICAL: bonding module not loaded";rc=2;;
     3) echo "WARNING: state of ${if} device $2 is $3";rc=1;;
     4) echo "UNKNOWN: no bondinterface with name ${if} found";rc=3;;
+    5) echo "UNKNOWN: Usage: ${me} [-i <bond interface name>]";rc=3;;
+    6) echo "CRITICAL: bondinterface ${if} has no active slaves";rc=2;;
   esac
-  cleanup
-  exit $rc
 }
 
 # SCRIPT
-[ $# -eq 1 -o $# -gt 2 ] && usage
+# 1st set default return code:
+rc=0
+
+# test if this script was called correctly
+[ $# -eq 1 -o $# -gt 2 ] && result 5
+[ $rc -gt 0 ] && exit $rc
+
 [ $# -eq 2 ] && get_options $@
+[ $rc -gt 0 ] && exit $rc
 
 # 1st we check if bonding module is loaded
 [ "$(${LSMOD}|grep bonding)" = "" ] && result 2
+[ $rc -gt 0 ] && exit $rc
 
 # test if there is any bond interface with this name
 [ -f "/proc/net/bonding/${if}" ] || result 4
+[ $rc -gt 0 ] && exit $rc
+
+# Inspect the state of the entire bond interface
+ifstate=$(${AWK} '/Currently Active Slave/ {print $4}' /proc/net/bonding/${if})
+[ "${ifstate}" = "None" ]&& result 6
+[ $rc -gt 0 ] && exit $rc
 
 # test state of each if in bond
-${GREP} "Slave Interface" /proc/net/bonding/${if} |awk '{print $3}'|while read ethdev;do
-  state=$(grep -A1 "Slave Interface: ${ethdev}" /proc/net/bonding/${if}|tail -1|awk '{print $3}')
-  [ "${state}" = "up" ]||result 3 ${ethdev} ${state}
+ethdevs=$(${AWK} '/Slave Interface/ {print $3}' /proc/net/bonding/${if})
+for ethdev in ${ethdevs};do
+  state=$(${GREP} -A1 "Slave Interface: ${ethdev}" /proc/net/bonding/${if}|${AWK} '/MII Status:/ {print $3}')
+  if [ "${state}" != "up" ];then
+    result 3 ${ethdev} ${state}
+  fi
 done
 
-# if we make it here we're ok
-result 0
+[ $rc -eq 0 ] && result 0
+exit $rc
 
 #END

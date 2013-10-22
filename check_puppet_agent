@@ -58,6 +58,7 @@
 #                       - Added test kill -0 to see if process is still there
 # 20130725  A.Swen      Based on feedback Михайло Масик updated a test (removed ! from test)
 # 20130725  A.Swen      Added sudo to puppet config print pidfile.
+# 20131022  halt	Sudo is not REQUIRED for the PID check
 
 # SETTINGS
 CRIT=7200
@@ -139,7 +140,7 @@ if [ ${daemonized} -eq 1 ];then
   # if there is a pidfile tell me the pid, else fail
   [ -f ${pidfile} ]&&pid=$(cat ${pidfile})||result 4
   # see if the process is running
-  sudo kill -0 ${pid} ||result 4
+  [ "$(ps -p ${pid} | wc -l)" = "2" ] ||result 4
   # test if the pid we found in the pidfile is puppet:
   grep -q puppet /proc/${pid}/cmdline ||result 4
 fi

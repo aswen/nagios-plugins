@@ -35,13 +35,8 @@
 #
 # NOTE:
 # This script needs a line like so in the sudoers:
-# nagios ALL=NOPASSWD: /usr/lib/nagios/plugins/check_puppet_agent
-# or better:
-# nagios ALL=NOPASSWD: puppet config print state lastrunfile
-# and these when you run puppet as a daemon and wish to test that:
-# nagios ALL=NOPASSWD: puppet config print state pidfile
-# nagios ALL=NOPASSWD: kill -0
-
+# nagios ALL=NOPASSWD:/usr/bin/puppet,/usr/lib/nagios/plugins/check_puppet_agent,/bin/kill
+#
 # CHANGELOG:
 # 20120126	A.Swen	    created.
 # 20120214  trey85stang Modified, added getopts, usage, defaults
@@ -66,7 +61,7 @@ WARN=3600
 # FUNCTIONS
 result () {
   case $1 in
-    0) echo "OK: Puppet agent ${version} running catalogversion ${config}";rc=0 ;;
+    0) echo "OK: Puppet agent ${version} running catalogversion ${config}, and executed at ${last_run_human} for last time";rc=0 ;;
     1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete";rc=3 ;;
     2) echo "WARNING: Last run was ${time_since_last} seconds ago. warn is ${WARN}";rc=1 ;;
     3) echo "CRITICAL: Last run was ${time_since_last} seconds ago. crit is ${CRIT}";rc=2 ;;
@@ -82,7 +77,7 @@ usage () {
   echo "USAGE: "
   echo "  $0 [-w 3600] [-c 7200] [-s lastrunfile] [-d0]"
   echo "    -w warning threshold (default 3600 seconds)"
-  echo "    -c ciritcal threshold (default 7200 seconds)"
+  echo "    -c critical threshold (default 7200 seconds)"
   echo "    -s lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
   echo "    -d 0|1: puppet agent should be a daemon(1) or not (0).(default 1)"
   echo ""
@@ -146,6 +141,7 @@ fi
 
 # check when last run happened
 last_run=$(awk '/last_run:/ {print $2}' ${lastrunfile})
+last_run_human=$(date -d @${last_run} +%c)
 now=$(date +%s)
 time_since_last=$((now-last_run))
 [ ${time_since_last} -ge ${CRIT} ] && result 3

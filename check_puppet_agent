@@ -53,6 +53,7 @@
 #                       - Added test kill -0 to see if process is still there
 # 20130725  A.Swen      Based on feedback Михайло Масик updated a test (removed ! from test)
 # 20130725  A.Swen      Added sudo to puppet config print pidfile.
+# 20131209  Mark Ruys   Issue warning when last_run_report.yaml contain errors.
 
 # SETTINGS
 CRIT=7200
@@ -68,6 +69,7 @@ result () {
     4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
     6) echo "CRITICAL: Last run had 1 or more errors. Check the logs";rc=2 ;;
+    7) echo "WARNING: ${last_run_log}" ;rc=1 ;;
   esac
   exit $rc
 }
@@ -146,6 +148,20 @@ now=$(date +%s)
 time_since_last=$((now-last_run))
 [ ${time_since_last} -ge ${CRIT} ] && result 3
 [ ${time_since_last} -ge ${WARN} ] && result 2
+
+# check last_run_report.yaml for errors
+lastrunreport=$(sudo /usr/bin/puppet config print lastrunreport)
+if [ -f ${lastrunreport} ]; then
+	last_run_log=$(awk '
+/^  [^ ]/ { inside = 0 }
+/^  logs:/ { inside = 1 }
+inside == 1 {
+        if ( $1 == "message:" ) { $1 = ""; gsub(/^ "/, ""); gsub(/"$/, ""); message = $0 }
+        if ( $1 == "level:" && $3 ~ /err|alert|emerg|crit/ ) print message
+}
+' ${lastrunreport})
+	[ -n "${last_run_log}" ] && result 7
+fi
 
 # get some more info from the yaml file
 config=$(awk '/config:/ {print $2}' ${lastrunfile})

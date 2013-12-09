@@ -69,7 +69,7 @@ result () {
     4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
     6) echo "CRITICAL: Last run had 1 or more errors. Check the logs";rc=2 ;;
-    7) echo "WARNING: Catalog at ${config_human} is too old" ;rc=2 ;;
+    7) echo "WARNING: Catalog at ${config_human} is too old" ;rc=1 ;;
   esac
   exit $rc
 }

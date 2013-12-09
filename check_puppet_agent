@@ -53,6 +53,7 @@
 #                       - Added test kill -0 to see if process is still there
 # 20130725  A.Swen      Based on feedback Михайло Масик updated a test (removed ! from test)
 # 20130725  A.Swen      Added sudo to puppet config print pidfile.
+# 20131209  Mark Ruys   Issue warning when catalog is too old.
 
 # SETTINGS
 CRIT=7200
@@ -68,6 +69,7 @@ result () {
     4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
     6) echo "CRITICAL: Last run had 1 or more errors. Check the logs";rc=2 ;;
+    7) echo "WARNING: Catalog at ${config_human} is too old" ;rc=2 ;;
   esac
   exit $rc
 }
@@ -158,6 +160,11 @@ failed_to_restart=$(awk '/failed_to_restart:/ {print $2}' ${lastrunfile})
 [ -z "${last_run}" -o -z "${config}" -o -z "${version}" -o -z "${failed}" -o -z "${failure}" -o -z "${failed_to_restart}" ] && result 1
 # if anything went wrong last run => crit
 [ ${failed} -gt 0 -o  ${failure} -gt 0 -o ${failed_to_restart} -gt 0 ] && result 6
+
+# if we have an old catalog, issue a warning
+time_since_last=$((now-config))
+config_human=$(date -d @${config} +%c)
+[ ${time_since_last} -ge ${WARN} ] && result 7
 
 # if we come here it works!
 result 0

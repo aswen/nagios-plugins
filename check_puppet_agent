@@ -54,6 +54,7 @@
 # 20130725  A.Swen      Based on feedback Михайло Масик updated a test (removed ! from test)
 # 20130725  A.Swen      Added sudo to puppet config print pidfile.
 # 20131209  Mark Ruys   Issue warning when last_run_report.yaml contain errors.
+# 20141015  A.Swen      Add show disabled status.
 
 # SETTINGS
 CRIT=7200
@@ -70,6 +71,7 @@ result () {
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
     6) echo "CRITICAL: Last run had 1 or more errors. Check the logs";rc=2 ;;
     7) echo "WARNING: ${last_run_log}" ;rc=1 ;;
+    8) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' ${agent_disabled_lockfile})";rc=3 ;;
   esac
   exit $rc
 }
@@ -81,6 +83,7 @@ usage () {
   echo "    -w warning threshold (default 3600 seconds)"
   echo "    -c critical threshold (default 7200 seconds)"
   echo "    -s lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
+  echo "    -l agent_disabled_lockfile (default: /var/lib/puppet/state/agent_disabled.lock)"
   echo "    -d 0|1: puppet agent should be a daemon(1) or not (0).(default 1)"
   echo ""
   exit 1
@@ -105,6 +108,7 @@ while getopts "c:d:s:w:" opt; do
       fi
     ;;
     s) lastrunfile=${OPTARG} ;;
+    l) agent_disabled_lockfile=${OPTARG} ;;
     w)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
       then
@@ -118,6 +122,10 @@ while getopts "c:d:s:w:" opt; do
     ;;
   esac
 done
+
+# If there's a disabled.lock file don't look any further.
+[ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo /usr/bin/puppet config print agent_disabled_lockfile)
+[ -f "${agent_disabled_lockfile}" ] && result 8
 
 # if the lastrunfile is not given as a param try to find it ourselves
 [ -z "${lastrunfile}" ] && lastrunfile=$(sudo /usr/bin/puppet config print lastrunfile)

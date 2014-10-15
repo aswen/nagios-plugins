@@ -70,8 +70,7 @@ result () {
     4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
     6) echo "CRITICAL: Last run had 1 or more errors. Check the logs";rc=2 ;;
-    7) echo "WARNING: ${last_run_log}" ;rc=1 ;;
-    8) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' ${agent_disabled_lockfile})";rc=3 ;;
+    7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' ${agent_disabled_lockfile})";rc=3 ;;
   esac
   exit $rc
 }
@@ -125,7 +124,7 @@ done
 
 # If there's a disabled.lock file don't look any further.
 [ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo /usr/bin/puppet config print agent_disabled_lockfile)
-[ -f "${agent_disabled_lockfile}" ] && result 8
+[ -f "${agent_disabled_lockfile}" ] && result 7
 
 # if the lastrunfile is not given as a param try to find it ourselves
 [ -z "${lastrunfile}" ] && lastrunfile=$(sudo /usr/bin/puppet config print lastrunfile)
@@ -156,20 +155,6 @@ now=$(date +%s)
 time_since_last=$((now-last_run))
 [ ${time_since_last} -ge ${CRIT} ] && result 3
 [ ${time_since_last} -ge ${WARN} ] && result 2
-
-# check last_run_report.yaml for errors
-lastrunreport=$(sudo /usr/bin/puppet config print lastrunreport)
-if [ -f ${lastrunreport} ]; then
-	last_run_log=$(awk '
-/^  [^ ]/ { inside = 0 }
-/^  logs:/ { inside = 1 }
-inside == 1 {
-        if ( $1 == "message:" ) { $1 = ""; gsub(/^ "/, ""); gsub(/"$/, ""); message = $0 }
-        if ( $1 == "level:" && $3 ~ /err|alert|emerg|crit/ ) print message
-}
-' ${lastrunreport})
-	[ -n "${last_run_log}" ] && result 7
-fi
 
 # get some more info from the yaml file
 config=$(awk '/config:/ {print $2}' ${lastrunfile})

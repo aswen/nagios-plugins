@@ -33,10 +33,6 @@
 #  check_command check_nrpe!check_puppet_agent!3600!7200
 #}
 #
-# NOTE:
-# This script needs a line like so in the sudoers:
-# nagios ALL=NOPASSWD:/usr/bin/puppet,/usr/lib/nagios/plugins/check_puppet_agent,/bin/kill
-#
 # CHANGELOG:
 # 20120126	A.Swen	    created.
 # 20120214  trey85stang Modified, added getopts, usage, defaults
@@ -55,7 +51,7 @@
 # 20130725  A.Swen      Added sudo to puppet config print pidfile.
 # 20131209  Mark Ruys   Issue warning when last_run_report.yaml contain errors.
 # 20141015  A.Swen      Add show disabled status.
-
+# 20141127  KissT       Remove requirement to have sudo custom rule 
 # SETTINGS
 CRIT=7200
 WARN=3600
@@ -143,7 +139,7 @@ if [ ${daemonized} -eq 1 ];then
   # if there is a pidfile tell me the pid, else fail
   [ -f ${pidfile} ]&&pid=$(cat ${pidfile})||result 4
   # see if the process is running
-  sudo kill -0 ${pid} ||result 4
+  [ "$(ps -p ${pid} | wc -l)" = "2" ] ||result 4
   # test if the pid we found in the pidfile is puppet:
   grep -q puppet /proc/${pid}/cmdline ||result 4
 fi

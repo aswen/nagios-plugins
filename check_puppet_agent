@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Nagios plugin to monitor Puppet agent state
 #
 # Copyright (c) 2011 Alexander Swen <a@swen.nu>
@@ -52,6 +52,7 @@
 # 20131209  Mark Ruys   Issue warning when last_run_report.yaml contain errors.
 # 20141015  A.Swen      Add show disabled status.
 # 20141127  KissT       Remove requirement to have sudo custom rule 
+# 20141055  D.Stirling  *BSD compatability: use sh instead of bash, env for paths & optionally skip /proc test
 # SETTINGS
 CRIT=7200
 WARN=3600
@@ -119,11 +120,11 @@ while getopts "c:d:s:w:" opt; do
 done
 
 # If there's a disabled.lock file don't look any further.
-[ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo /usr/bin/puppet config print agent_disabled_lockfile)
+[ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo /usr/bin/env puppet config print agent_disabled_lockfile)
 [ -f "${agent_disabled_lockfile}" ] && result 7
 
 # if the lastrunfile is not given as a param try to find it ourselves
-[ -z "${lastrunfile}" ] && lastrunfile=$(sudo /usr/bin/puppet config print lastrunfile)
+[ -z "${lastrunfile}" ] && lastrunfile=$(sudo /usr/bin/env puppet config print lastrunfile)
 # check if state file exists
 [ -s ${lastrunfile} -a -r ${lastrunfile} ] || result 1
 
@@ -132,16 +133,18 @@ done
 # if Puppet agent runs as a daemon there should be a process. We can't check so much when it is triggered by cron.
 if [ ${daemonized} -eq 1 ];then
   # check puppet daemon:
-  # I only know the cmd lines for Debian and CentOS/RedHat:
-  [ "$(ps axf|egrep "/usr/bin/ruby /usr/sbin/puppetd|/usr/bin/ruby1.8 /usr/bin/puppet agent|/usr/bin/ruby /usr/bin/puppet agent"|grep -v grep)" ] || result 4
-  default_pidfile=/var/run/puppet/agent.pid
-  [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$(sudo /usr/bin/puppet config print pidfile)
+  [ "$(ps aux|egrep "/usr/(local/)?bin/ruby[0-9.]* /usr/(local/)?s?bin/puppet agent")" ] || result 4
+  #set OS dependent default PID file (on OpenBSD Puppet<=3.4.2 'puppet config print pidfile' gives an incorrect path)
+  uname -a|grep -q BSD && default_pidfile=/var/puppet/run/agent.pid||default_pidfile=/var/run/puppet/agent.pid
+  [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$(sudo /usr/bin/env puppet config print pidfile)
   # if there is a pidfile tell me the pid, else fail
   [ -f ${pidfile} ]&&pid=$(cat ${pidfile})||result 4
   # see if the process is running
-  [ "$(ps -p ${pid} | wc -l)" = "2" ] ||result 4
-  # test if the pid we found in the pidfile is puppet:
-  grep -q puppet /proc/${pid}/cmdline ||result 4
+  ps -p ${pid} > /dev/null ||result 4
+  # on linux test if the pid we found in the pidfile is puppet:
+  if uname -a|grep -q Linux; then
+    grep -q puppet /proc/${pid}/cmdline ||result 4
+  fi
 fi
 
 # check when last run happened

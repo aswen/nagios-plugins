@@ -52,6 +52,7 @@
 # 20131209  Mark Ruys   Issue warning when last_run_report.yaml contain errors.
 # 20141015  A.Swen      Add show disabled status.
 # 20141127  KissT       Remove requirement to have sudo custom rule 
+# 20150322  btriller    parse agent_disabled_lockfile option
 # SETTINGS
 CRIT=7200
 WARN=3600
@@ -84,7 +85,7 @@ usage () {
   exit 1
 }
 
-while getopts "c:d:s:w:" opt; do
+while getopts "c:d:s:w:l:" opt; do
   case $opt in
     c)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]

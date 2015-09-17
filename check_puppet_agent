@@ -120,7 +120,6 @@ while getopts "c:d:s:w:" opt; do
   esac
 done
 
-# If there's a disabled.lock file don't look any further.
 
 # Find out Puppet major version to determine configprint syntax
 puppet_major_version=$(puppet -V|cut -d. -f1)
@@ -133,6 +132,7 @@ else
 fi
 
 [ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo $puppet_config_print agent_disabled_lockfile)
+# If there's a disabled.lock file don't look any further.
 [ -f "${agent_disabled_lockfile}" ] && result 7
 
 # if the lastrunfile is not given as a param try to find it ourselves

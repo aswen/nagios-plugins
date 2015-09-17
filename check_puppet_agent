@@ -55,6 +55,7 @@
 # 20150917  A.Swen      Based on an idea of Daniel Lawrence check for major version to decide how to print config.
 #                       Based on idea of D.Stirling switched to sh.
 #                       Findout puppet executable location using which.
+#                       Based on an idea of D.Stirling updated daemon check.
 
 # SETTINGS
 CRIT=7200
@@ -150,8 +151,8 @@ fi
 # if Puppet agent runs as a daemon there should be a process. We can't check so much when it is triggered by cron.
 if [ ${daemonized} -eq 1 ];then
   # check puppet daemon:
-  # I only know the cmd lines for Debian and CentOS/RedHat:
-  [ "$(ps axf|egrep "/usr/bin/ruby /usr/sbin/puppetd|/usr/bin/ruby1.8 $PUPPET agent|/usr/bin/ruby $PUPPET agent"|grep -v grep)" ] || result 4
+  [ "$(ps axf|egrep "/usr(/local)?/bin/ruby[0-9.]* /usr(/local)?/s?bin/puppetd?"|grep -v egrep)" ] || result 4
+
   default_pidfile=/var/run/puppet/agent.pid
   [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$($puppet_config_print pidfile)
   # if there is a pidfile tell me the pid, else fail

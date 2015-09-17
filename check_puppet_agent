@@ -131,17 +131,17 @@ puppet_major_version=$($PUPPET -V|cut -d. -f1)
 
 # Set Puppet configprint syntax
 if [ $puppet_major_version -ge 3 ];then
-  puppet_config_print="$PUPPET config print"
+  puppet_config_print="sudo $PUPPET config print"
 else
-  puppet_config_print="$PUPPET --configprint"
+  puppet_config_print="sudo $PUPPET --configprint"
 fi
 
-[ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo $puppet_config_print agent_disabled_lockfile)
+[ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$($puppet_config_print agent_disabled_lockfile)
 # If there's a disabled.lock file don't look any further.
 [ -f "${agent_disabled_lockfile}" ] && result 7
 
 # if the lastrunfile is not given as a param try to find it ourselves
-[ -z "${lastrunfile}" ] && lastrunfile=$(sudo $puppet_config_print lastrunfile)
+[ -z "${lastrunfile}" ] && lastrunfile=$($puppet_config_print lastrunfile)
 # check if state file exists
 [ -s ${lastrunfile} -a -r ${lastrunfile} ] || result 1
 
@@ -153,7 +153,7 @@ if [ ${daemonized} -eq 1 ];then
   # I only know the cmd lines for Debian and CentOS/RedHat:
   [ "$(ps axf|egrep "/usr/bin/ruby /usr/sbin/puppetd|/usr/bin/ruby1.8 $PUPPET agent|/usr/bin/ruby $PUPPET agent"|grep -v grep)" ] || result 4
   default_pidfile=/var/run/puppet/agent.pid
-  [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$(sudo $puppet_config_print pidfile)
+  [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$($puppet_config_print pidfile)
   # if there is a pidfile tell me the pid, else fail
   [ -f ${pidfile} ]&&pid=$(cat ${pidfile})||result 4
   # see if the process is running

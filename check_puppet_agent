@@ -145,7 +145,7 @@ fi
 # check if state file exists
 [ -s ${lastrunfile} -a -r ${lastrunfile} ] || result 1
 
-# check if daemonized was sent, else set default
+# Check if daemonized was sent, else set default to 1.
 [ -n "${daemonized}" ] || daemonized=1
 # if Puppet agent runs as a daemon there should be a process. We can't check so much when it is triggered by cron.
 if [ ${daemonized} -eq 1 ];then

@@ -42,9 +42,9 @@
 #                       Switched to use awk to filter values from lastrunfile and set them as params
 #                       Updated some comments
 #                       Removed bug in search for process (that would previously always find something because grep find it's processline)
-#                       "puppet config print lastrunfile" has to be run as root. As normal user it yields ~/.puppet/var/state.
+#                       "puppet agent --configprint lastrunfile" has to be run as root. As normal user it yields ~/.puppet/var/state.
 #                       Based on feedback Михайло Масик updated:
-#                       - Puppet --configprint => puppet config print (version 3 has new way of printing config)
+#                       - Puppet --configprint => puppet agent --configprint (version 3 has new way of printing config)
 #                       - Added new pattern to search for process
 #                       - Added test kill -0 to see if process is still there
 # 20130725  A.Swen      Based on feedback Михайло Масик updated a test (removed ! from test)
@@ -119,11 +119,11 @@ while getopts "c:d:s:w:" opt; do
 done
 
 # If there's a disabled.lock file don't look any further.
-[ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo /usr/bin/puppet config print agent_disabled_lockfile)
+[ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo /usr/bin/puppet agent --configprint agent_disabled_lockfile)
 [ -f "${agent_disabled_lockfile}" ] && result 7
 
 # if the lastrunfile is not given as a param try to find it ourselves
-[ -z "${lastrunfile}" ] && lastrunfile=$(sudo /usr/bin/puppet config print lastrunfile)
+[ -z "${lastrunfile}" ] && lastrunfile=$(sudo /usr/bin/puppet agent --configprint lastrunfile)
 # check if state file exists
 [ -s ${lastrunfile} -a -r ${lastrunfile} ] || result 1
 
@@ -135,7 +135,7 @@ if [ ${daemonized} -eq 1 ];then
   # I only know the cmd lines for Debian and CentOS/RedHat:
   [ "$(ps axf|egrep "/usr/bin/ruby /usr/sbin/puppetd|/usr/bin/ruby1.8 /usr/bin/puppet agent|/usr/bin/ruby /usr/bin/puppet agent"|grep -v grep)" ] || result 4
   default_pidfile=/var/run/puppet/agent.pid
-  [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$(sudo /usr/bin/puppet config print pidfile)
+  [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$(sudo /usr/bin/puppet agent --configprint pidfile)
   # if there is a pidfile tell me the pid, else fail
   [ -f ${pidfile} ]&&pid=$(cat ${pidfile})||result 4
   # see if the process is running

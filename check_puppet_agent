@@ -56,6 +56,7 @@
 #                       Based on idea of D.Stirling switched to sh.
 #                       Findout puppet executable location using which.
 #                       Based on an idea of D.Stirling updated daemon check.
+#                       Based on an idea of D.Stirling made BSD compattible.
 
 # SETTINGS
 CRIT=7200
@@ -153,14 +154,19 @@ if [ ${daemonized} -eq 1 ];then
   # check puppet daemon:
   [ "$(ps axf|egrep "/usr(/local)?/bin/ruby[0-9.]* /usr(/local)?/s?bin/puppetd?"|grep -v egrep)" ] || result 4
 
-  default_pidfile=/var/run/puppet/agent.pid
-  [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$($puppet_config_print pidfile)
+  uname -a|grep -q BSD && default_pidfile=/var/puppet/run/agent.pid || default_pidfile=/var/run/puppet/agent.pid
+  [ -e ${default_pidfile} ] && pidfile=${default_pidfile} || pidfile=$($puppet_config_print pidfile)
+
   # if there is a pidfile tell me the pid, else fail
   [ -f ${pidfile} ]&&pid=$(cat ${pidfile})||result 4
+
   # see if the process is running
-  [ "$(ps -p ${pid} | wc -l)" = "2" ] ||result 4
-  # test if the pid we found in the pidfile is puppet:
-  grep -q puppet /proc/${pid}/cmdline ||result 4
+  ps -p ${pid} > /dev/null || result 4
+
+  # On Linux test if the pid we found in the pidfile is puppet:
+  if uname -a|grep -q Linux;then
+    grep -q puppet /proc/${pid}/cmdline ||result 4
+  fi
 fi
 
 # check when last run happened

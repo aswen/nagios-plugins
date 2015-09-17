@@ -68,14 +68,14 @@ WARN=3600
 # FUNCTIONS
 result () {
   case $1 in
-    0) echo "OK: Puppet agent ${version} running catalogversion ${config}, and executed at ${last_run_human} for last time";rc=0 ;;
+    0) echo "OK: Puppet agent $version running catalogversion $config, and executed at $last_run_human for last time";rc=0 ;;
     1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete";rc=3 ;;
-    2) echo "WARNING: Last run was ${time_since_last} seconds ago. warn is ${WARN}";rc=1 ;;
-    3) echo "CRITICAL: Last run was ${time_since_last} seconds ago. crit is ${CRIT}";rc=2 ;;
+    2) echo "WARNING: Last run was $time_since_last seconds ago. warn is $WARN";rc=1 ;;
+    3) echo "CRITICAL: Last run was $time_since_last seconds ago. crit is $CRIT";rc=2 ;;
     4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
     6) echo "CRITICAL: Last run had 1 or more errors. Check the logs";rc=2 ;;
-    7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' ${agent_disabled_lockfile})";rc=3 ;;
+    7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' $agent_disabled_lockfile)";rc=3 ;;
     8) echo "UNKNOWN: No Puppet executable found";rc=3 ;;
   esac
   exit $rc
@@ -107,14 +107,14 @@ while getopts "c:d:s:w:" opt; do
     ;;
     d)
       # argument should be 0 or 1
-      if [ ${OPTARG} -eq 0 -o ${OPTARG} -eq 1 ];then
-        daemonized=${OPTARG}
+      if [ $OPTARG -eq 0 -o $OPTARG -eq 1 ];then
+        daemonized=$OPTARG
       else
         usage
       fi
     ;;
-    s) lastrunfile=${OPTARG} ;;
-    l) agent_disabled_lockfile=${OPTARG} ;;
+    s) lastrunfile=$OPTARG ;;
+    l) agent_disabled_lockfile=$OPTARG ;;
     w)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
       then
@@ -142,56 +142,56 @@ else
   puppet_config_print="sudo $PUPPET --configprint"
 fi
 
-[ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$($puppet_config_print agent_disabled_lockfile)
+[ -z "$agent_disabled_lockfile" ] && agent_disabled_lockfile=$($puppet_config_print agent_disabled_lockfile)
 # If there's a disabled.lock file don't look any further.
-[ -f "${agent_disabled_lockfile}" ] && result 7
+[ -f "$agent_disabled_lockfile" ] && result 7
 
 # If the lastrunfile is not given as a param try to find it ourselves.
-[ -z "${lastrunfile}" ] && lastrunfile=$($puppet_config_print lastrunfile)
+[ -z "$lastrunfile" ] && lastrunfile=$($puppet_config_print lastrunfile)
 # Check if state file exists.
-[ -s ${lastrunfile} -a -r ${lastrunfile} ] || result 1
+[ -s $lastrunfile -a -r $lastrunfile ] || result 1
 
 # Check if daemonized was sent, else set default to 1.
-[ -n "${daemonized}" ] || daemonized=1
+[ -n "$daemonized" ] || daemonized=1
 # If Puppet agent runs as a daemon there should be a process. We can't check so much when it is triggered by cron.
-if [ ${daemonized} -eq 1 ];then
+if [ $daemonized -eq 1 ];then
   # Check puppet daemon:
   [ "$(ps axf|egrep "/usr(/local)?/bin/ruby[0-9.]* /usr(/local)?/s?bin/puppetd?"|grep -v egrep)" ] || result 4
 
   uname -a|grep -q BSD && default_pidfile=/var/puppet/run/agent.pid || default_pidfile=/var/run/puppet/agent.pid
-  [ -e ${default_pidfile} ] && pidfile=${default_pidfile} || pidfile=$($puppet_config_print pidfile)
+  [ -e $default_pidfile ] && pidfile=$default_pidfile || pidfile=$($puppet_config_print pidfile)
 
   # If there is a pidfile tell me the pid, else fail.
-  [ -f ${pidfile} ]&&pid=$(cat ${pidfile})||result 4
+  [ -f $pidfile ]&&pid=$(cat $pidfile)||result 4
 
   # See if the process is running.
-  ps -p ${pid} > /dev/null || result 4
+  ps -p $pid > /dev/null || result 4
 
   # On Linux test if the pid we found in the pidfile is puppet:
   if uname -a|grep -q Linux;then
-    grep -q puppet /proc/${pid}/cmdline ||result 4
+    grep -q puppet /proc/$pid/cmdline ||result 4
   fi
 fi
 
 # Check when last run happened.
-last_run=$(awk '/last_run:/ {print $2}' ${lastrunfile})
-last_run_human=$(date -d @${last_run} +%c)
+last_run=$(awk '/last_run:/ {print $2}' $lastrunfile)
+last_run_human=$(date -d @$last_run +%c)
 now=$(date +%s)
 time_since_last=$((now-last_run))
-[ ${time_since_last} -ge ${CRIT} ] && result 3
-[ ${time_since_last} -ge ${WARN} ] && result 2
+[ $time_since_last -ge $CRIT ] && result 3
+[ $time_since_last -ge $WARN ] && result 2
 
 # Get some more info from the yaml file.
-config=$(awk '/config:/ {print $2}' ${lastrunfile})
-version=$(awk '/puppet:/ {print $2}' ${lastrunfile})
-failed=$(awk '/failed:/ {print $2}' ${lastrunfile})
-failure=$(awk '/failure:/ {print $2}' ${lastrunfile})
-failed_to_restart=$(awk '/failed_to_restart:/ {print $2}' ${lastrunfile})
+config=$(awk '/config:/ {print $2}' $lastrunfile)
+version=$(awk '/puppet:/ {print $2}' $lastrunfile)
+failed=$(awk '/failed:/ {print $2}' $lastrunfile)
+failure=$(awk '/failure:/ {print $2}' $lastrunfile)
+failed_to_restart=$(awk '/failed_to_restart:/ {print $2}' $lastrunfile)
 
 # If any of the values above doesn't return raise an error.
-[ -z "${last_run}" -o -z "${config}" -o -z "${version}" -o -z "${failed}" -o -z "${failure}" -o -z "${failed_to_restart}" ] && result 1
+[ -z "$last_run" -o -z "$config" -o -z "$version" -o -z "$failed" -o -z "$failure" -o -z "$failed_to_restart" ] && result 1
 # If anything went wrong last run => crit.
-[ ${failed} -gt 0 -o  ${failure} -gt 0 -o ${failed_to_restart} -gt 0 ] && result 6
+[ $failed -gt 0 -o  $failure -gt 0 -o $failed_to_restart -gt 0 ] && result 6
 
 # If we come here it works!
 result 0

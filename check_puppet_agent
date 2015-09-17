@@ -52,6 +52,8 @@
 # 20131209  Mark Ruys   Issue warning when last_run_report.yaml contain errors.
 # 20141015  A.Swen      Add show disabled status.
 # 20141127  KissT       Remove requirement to have sudo custom rule 
+# 20150917  A.Swen      Based on an idea of Daniel Lawrence check for major version to decide how to print config.
+
 # SETTINGS
 CRIT=7200
 WARN=3600
@@ -119,11 +121,22 @@ while getopts "c:d:s:w:" opt; do
 done
 
 # If there's a disabled.lock file don't look any further.
-[ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo /usr/bin/puppet agent --configprint agent_disabled_lockfile)
+
+# Find out Puppet major version to determine configprint syntax
+puppet_major_version=$(puppet -V|cut -d. -f1)
+
+# Set Puppet configprint syntax
+if [ $pupet_major_version -ge 3 ];then
+  puppet_config_print="/usr/bin/puppet config print"
+else
+  puppet_config_print="/usr/bin/puppet --configprint"
+fi
+
+[ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo $puppet_config_print agent_disabled_lockfile)
 [ -f "${agent_disabled_lockfile}" ] && result 7
 
 # if the lastrunfile is not given as a param try to find it ourselves
-[ -z "${lastrunfile}" ] && lastrunfile=$(sudo /usr/bin/puppet agent --configprint lastrunfile)
+[ -z "${lastrunfile}" ] && lastrunfile=$(sudo $puppet_config_print lastrunfile)
 # check if state file exists
 [ -s ${lastrunfile} -a -r ${lastrunfile} ] || result 1
 
@@ -135,7 +148,7 @@ if [ ${daemonized} -eq 1 ];then
   # I only know the cmd lines for Debian and CentOS/RedHat:
   [ "$(ps axf|egrep "/usr/bin/ruby /usr/sbin/puppetd|/usr/bin/ruby1.8 /usr/bin/puppet agent|/usr/bin/ruby /usr/bin/puppet agent"|grep -v grep)" ] || result 4
   default_pidfile=/var/run/puppet/agent.pid
-  [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$(sudo /usr/bin/puppet agent --configprint pidfile)
+  [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$(sudo $puppet_config_print pidfile)
   # if there is a pidfile tell me the pid, else fail
   [ -f ${pidfile} ]&&pid=$(cat ${pidfile})||result 4
   # see if the process is running

@@ -85,18 +85,19 @@ result () {
 usage () {
   echo ""
   echo "USAGE: "
-  echo "  $0 [-w 3600] [-c 7200] [-s lastrunfile] [-d0]"
-  echo "    -w warning threshold (default 3600 seconds)"
-  echo "    -c critical threshold (default 7200 seconds)"
-  echo "    -s lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
-  echo "    -l agent_disabled_lockfile (default: /var/lib/puppet/state/agent_disabled.lock)"
+  echo "  $0 [-c 7200] [-d0] [-l agent_disabled_lockfile] [-s lastrunfile] [-w 3600]"
+  echo "    -c Critical threshold (default 7200 seconds)"
   echo "    -d 0|1: puppet agent should be a daemon(1) or not (0).(default 1)"
+  echo "    -h Show this help."
+  echo "    -l Agent_disabled_lockfile (default: /var/lib/puppet/state/agent_disabled.lock)"
+  echo "    -s Lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
+  echo "    -w Warning threshold (default 3600 seconds)"
   echo ""
   exit 1
 }
 
 # SCRIPT
-while getopts "c:d:l:s:w:" opt; do
+while getopts "c:d:hl:s:w:" opt; do
   case $opt in
     c)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -114,6 +115,7 @@ while getopts "c:d:l:s:w:" opt; do
         usage
       fi
     ;;
+    h) usage ;;
     l) agent_disabled_lockfile=$OPTARG ;;
     s) lastrunfile=$OPTARG ;;
     w)

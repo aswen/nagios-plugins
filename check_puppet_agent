@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Nagios plugin to monitor Puppet agent state
 #
 # Copyright (c) 2011 Alexander Swen <a@swen.nu>
@@ -51,8 +51,10 @@
 # 20130725  A.Swen      Added sudo to puppet config print pidfile.
 # 20131209  Mark Ruys   Issue warning when last_run_report.yaml contain errors.
 # 20141015  A.Swen      Add show disabled status.
-# 20141127  KissT       Remove requirement to have sudo custom rule 
+# 20141127  KissT       Remove requirement to have sudo custom rule
 # 20150917  A.Swen      Based on an idea of Daniel Lawrence check for major version to decide how to print config.
+#                       Based on idea of D.Stirling switched to sh.
+#                       Findout puppet executable location using which.
 
 # SETTINGS
 CRIT=7200
@@ -69,6 +71,7 @@ result () {
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
     6) echo "CRITICAL: Last run had 1 or more errors. Check the logs";rc=2 ;;
     7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' ${agent_disabled_lockfile})";rc=3 ;;
+    8) echo "UNKNOWN: No Puppet executable found";rc=3 ;;
   esac
   exit $rc
 }
@@ -120,15 +123,17 @@ while getopts "c:d:s:w:" opt; do
   esac
 done
 
+# Find location of puppet executable
+PUPPET=$(which puppet) || result 8
 
 # Find out Puppet major version to determine configprint syntax
-puppet_major_version=$(puppet -V|cut -d. -f1)
+puppet_major_version=$($PUPPET -V|cut -d. -f1)
 
 # Set Puppet configprint syntax
-if [ $pupet_major_version -ge 3 ];then
-  puppet_config_print="/usr/bin/puppet config print"
+if [ $puppet_major_version -ge 3 ];then
+  puppet_config_print="$PUPPET config print"
 else
-  puppet_config_print="/usr/bin/puppet --configprint"
+  puppet_config_print="$PUPPET --configprint"
 fi
 
 [ -z "${agent_disabled_lockfile}" ] && agent_disabled_lockfile=$(sudo $puppet_config_print agent_disabled_lockfile)
@@ -146,7 +151,7 @@ fi
 if [ ${daemonized} -eq 1 ];then
   # check puppet daemon:
   # I only know the cmd lines for Debian and CentOS/RedHat:
-  [ "$(ps axf|egrep "/usr/bin/ruby /usr/sbin/puppetd|/usr/bin/ruby1.8 /usr/bin/puppet agent|/usr/bin/ruby /usr/bin/puppet agent"|grep -v grep)" ] || result 4
+  [ "$(ps axf|egrep "/usr/bin/ruby /usr/sbin/puppetd|/usr/bin/ruby1.8 $PUPPET agent|/usr/bin/ruby $PUPPET agent"|grep -v grep)" ] || result 4
   default_pidfile=/var/run/puppet/agent.pid
   [ -e ${default_pidfile} ]&&pidfile=${default_pidfile}||pidfile=$(sudo $puppet_config_print pidfile)
   # if there is a pidfile tell me the pid, else fail

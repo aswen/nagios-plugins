@@ -78,6 +78,7 @@ result () {
     6) echo "CRITICAL: Last run had 1 or more errors. Check the logs";rc=2 ;;
     7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' $agent_disabled_lockfile)";rc=3 ;;
     8) echo "UNKNOWN: No Puppet executable found";rc=3 ;;
+    9) echo "UNKNOWN: Internal error: $2"; rc=3 ;;
   esac
   exit $rc
 }
@@ -132,11 +133,15 @@ while getopts "c:d:hl:s:w:" opt; do
   esac
 done
 
+[ -z "$HOME" ] && export HOME=~  # Some clean environment situations make puppet -V fail.
+
 # Find location of puppet executable.
 PUPPET=$(which puppet) || result 8
 
 # Find out Puppet major version to determine configprint syntax.
 puppet_major_version=$($PUPPET -V|cut -d. -f1)
+
+[ -z "$puppet_major_version" ] && result 9 "Puppet version unknown from $($PUPPET -V 2>&1)"
 
 # Set Puppet configprint syntax.
 if [ $puppet_major_version -ge 3 ];then
@@ -159,7 +164,7 @@ fi
 # If Puppet agent runs as a daemon there should be a process. We can't check so much when it is triggered by cron.
 if [ $daemonized -eq 1 ];then
   # Check puppet daemon:
-  [ "$(ps axf|egrep "/usr(/local)?/bin/ruby[0-9.]* /usr(/local)?/s?bin/puppetd?"|grep -v egrep)" ] || result 4
+  [ "$(ps axf|egrep "/usr(/local)?/bin/ruby[^ ]* /usr(/local)?/s?bin/puppetd?"|grep -v egrep)" ] || result 4
 
   uname -a|grep -q BSD && default_pidfile=/var/puppet/run/agent.pid || default_pidfile=/var/run/puppet/agent.pid
   [ -e $default_pidfile ] && pidfile=$default_pidfile || pidfile=$($puppet_config_print pidfile)

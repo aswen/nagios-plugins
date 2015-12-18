@@ -212,7 +212,7 @@ eval $(parse_yaml $lastrunfile)
 
 # Construct perf data using anything that starts with "_resources_ or _time_"
 if [ -n "$PERF" ] ; then
-  for V in $(compgen -v | grep "_resources_\|_time_") ; do
+  for V in $(compgen -v | grep "_resources_\|_time_total_") ; do
    PERF_DATA="$(echo $V | sed 's/^_//')=${!V} ${PERF_DATA}"
   done
 fi

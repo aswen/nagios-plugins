@@ -75,21 +75,23 @@
 #                       More reliable yaml parsing.
 #                       If $HOME not set: set it.
 #                       Fix PS command for Suse.
-# 20151218 K.A. Gillow  Calculate warn/crit based on runinterval and splay setting rather than use fixed settings.
+# 20151218  K.A. Gillow Calculate warn/crit based on runinterval and splay setting rather than use fixed settings.
 #                       Check system has been up longer than crit/warn time otherwise don't yet trigger normally relevant fault levels.
 #                       We never generally want puppet disabled so change to warning.
+# 20151229  A.Swen      Fix bug in PERF_DATA (replace compset by set).
+#                       Prettify $PERF_DATA output.
 
 # FUNCTIONS
 result () {
   case $1 in
-    0) echo "OK: Puppet agent $version running catalogversion $config, and executed at $last_run_human for last time | $PERF_DATA";rc=0 ;;
+    0) echo "OK: Puppet agent $version running catalogversion $config, and executed at $last_run_human for last time. $PERF_DATA";rc=0 ;;
     1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete";rc=3 ;;
-    2) echo "WARNING: Last run was $time_since_last seconds ago. Warn is $WARN | $PERF_DATA";rc=1 ;;
-    3) echo "CRITICAL: Last run was $time_since_last seconds ago. Crit is $CRIT | $PERF_DATA";rc=2 ;;
+    2) echo "WARNING: Last run was $time_since_last seconds ago. Warn is $WARN. $PERF_DATA";rc=1 ;;
+    3) echo "CRITICAL: Last run was $time_since_last seconds ago. Crit is $CRIT. $PERF_DATA";rc=2 ;;
     4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
-    6) echo "CRITICAL: Last run had 1 or more errors. Check the logs | $PERF_DATA";rc=2 ;;
-    7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' $agent_disabled_lockfile) | $PERF_DATA";rc=3 ;;
+    6) echo "CRITICAL: Last run had 1 or more errors. Check the logs. $PERF_DATA";rc=2 ;;
+    7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' $agent_disabled_lockfile). $PERF_DATA";rc=1 ;;
     8) echo "UNKNOWN: No Puppet executable found";rc=3 ;;
     9) echo "UNKNOWN: Internal error: $2"; rc=3 ;;
    10) echo "OK (PROBABLY): Puppet agent last successful run $last_run_human (runinterval $runinterval, splay $splay, splaylimit $splay limit) but system has not been up long enough to guarantee a fresh puppet run should have occurred";rc=0 ;;
@@ -238,9 +240,11 @@ eval $(parse_yaml $lastrunfile)
 
 # Construct perf data using anything that starts with "_resources_ or _time_"
 if [ -n "$PERF" ] ; then
-  for V in $(compgen -v | grep "_resources_\|_time_total_") ; do
-   PERF_DATA="$(echo $V | sed 's/^_//')=${!V} ${PERF_DATA}"
+  for V in $(set | grep "^_resources_\|^_time_total_") ; do
+   PERF_DATA="$(echo $V | sed 's/^_//'), $PERF_DATA"
   done
+  # Strip last "," from PERF_DATA
+  PERF_DATA=${PERF_DATA%, }
 fi
 
 # Check when last run happened.

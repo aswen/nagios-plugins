@@ -61,6 +61,10 @@
 #                       Based on an idea of D.Stirling updated daemon check.
 #                       Based on an idea of D.Stirling made BSD compattible.
 #                       Based on an idea of BTriller fix the getopts command to parse the agent_disabled_lockfile option.
+# 20151201  Akomakom    Add perf data option.
+#                       More reliable yaml parsing.
+#                       If $HOME not set: set it.
+#                       Fix PS command for Suse.
 
 # SETTINGS
 CRIT=7200
@@ -68,7 +72,7 @@ WARN=3600
 
 # FUNCTIONS
 result () {
-    
+
   case $1 in
     0) echo "OK: Puppet agent $version running catalogversion $config, and executed at $last_run_human for last time | $PERF_DATA";rc=0 ;;
     1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete | $PERF_DATA";rc=3 ;;
@@ -114,7 +118,7 @@ function parse_yaml {
          vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
          printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
       }
-   }' 
+   }'
 }
 
 # SCRIPT

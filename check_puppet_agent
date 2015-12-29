@@ -20,6 +20,8 @@
 #
 # Typical this check is placed on a client and runs via nrpe.
 # So add this to nrpe.cfg:
+#  command[check_puppet_agent]=/usr/lib/nagios/plugins/check_puppet
+# or if you want to specify options (rather than have the script calculate key values and facts) then something like
 #  command[check_puppet_agent]=/usr/lib/nagios/plugins/check_puppet -w 3600 -c 7200 -s /var/lib/puppet/state/last_run_summary.yaml -d 0
 # This should warn when the agent hasnt run for an hour and go critical after two hours
 #  if you have dont_blame_nrpe=1 set you can choose to
@@ -34,7 +36,15 @@
 #}
 #
 # Sudo required.
-# The user running this script must be allowed using sudo to run puppet config print.
+# The user running this script must be allowed using sudo to run puppet config print, e.g. in /etc/sudoers include the 3 lines
+# User_Alias NAGIOS=nagios
+# Cmnd_Alias PUPPETCHECK=/usr/bin/puppet config print runinterval,\
+#                        /usr/bin/puppet config print splay,\
+#                        /usr/bin/puppet config print splaylimit,\
+#                        /usr/bin/puppet config print agent_disabled_lockfile,\
+#                        /usr/bin/puppet config print lastrunfile,\
+#                        /usr/bin/puppet config print pidfile
+# NAGIOS     NOPASSWD:PUPPETCHECK
 #
 # CHANGELOG:
 # 20120126	A.Swen	    created.
@@ -65,25 +75,24 @@
 #                       More reliable yaml parsing.
 #                       If $HOME not set: set it.
 #                       Fix PS command for Suse.
-
-# SETTINGS
-CRIT=7200
-WARN=3600
+# 20151218 K.A. Gillow  Calculate warn/crit based on runinterval and splay setting rather than use fixed settings.
+#                       Check system has been up longer than crit/warn time otherwise don't yet trigger normally relevant fault levels.
+#                       We never generally want puppet disabled so change to warning.
 
 # FUNCTIONS
 result () {
-
   case $1 in
     0) echo "OK: Puppet agent $version running catalogversion $config, and executed at $last_run_human for last time | $PERF_DATA";rc=0 ;;
-    1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete | $PERF_DATA";rc=3 ;;
-    2) echo "WARNING: Last run was $time_since_last seconds ago. warn is $WARN | $PERF_DATA";rc=1 ;;
-    3) echo "CRITICAL: Last run was $time_since_last seconds ago. crit is $CRIT | $PERF_DATA";rc=2 ;;
+    1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete";rc=3 ;;
+    2) echo "WARNING: Last run was $time_since_last seconds ago. Warn is $WARN | $PERF_DATA";rc=1 ;;
+    3) echo "CRITICAL: Last run was $time_since_last seconds ago. Crit is $CRIT | $PERF_DATA";rc=2 ;;
     4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
     6) echo "CRITICAL: Last run had 1 or more errors. Check the logs | $PERF_DATA";rc=2 ;;
     7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' $agent_disabled_lockfile) | $PERF_DATA";rc=3 ;;
     8) echo "UNKNOWN: No Puppet executable found";rc=3 ;;
     9) echo "UNKNOWN: Internal error: $2"; rc=3 ;;
+   10) echo "OK (PROBABLY): Puppet agent last successful run $last_run_human (runinterval $runinterval, splay $splay, splaylimit $splay limit) but system has not been up long enough to guarantee a fresh puppet run should have occurred";rc=0 ;;
   esac
   exit $rc
 }
@@ -98,13 +107,13 @@ usage () {
   echo "    -l Agent_disabled_lockfile (default: /var/lib/puppet/state/agent_disabled.lock)"
   echo "    -s Lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
   echo "    -w Warning threshold (default 3600 seconds)"
-  echo "    -P enable perf_data in the output"
+  echo "    -P Enable perf_data in the output"
   echo ""
   exit 1
 }
 
 # Get a flat representation of yaml without relying on external tools.
-function parse_yaml {
+parse_yaml () {
    local prefix=$2
    local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
    sed -ne "s|^\($s\):|\1|" \
@@ -177,6 +186,19 @@ else
   puppet_config_print="sudo $PUPPET --configprint"
 fi
 
+# construct WARN and CRIT times based on runinterval plus a safety buffer
+# if they have not already been explicitly set
+runinterval=$($puppet_config_print runinterval)
+splaylimit=0
+splay=$($puppet_config_print splay)
+[ "$splay" != "false" ] && splaylimit=$($puppet_config_print splaylimit)
+[ -z "$WARN" ] && WARN=$(($runinterval + $splaylimit))
+[ -z "$CRIT" ] && CRIT=$(($WARN + $runinterval))
+#now check we finally have some sensible settings
+[ -z "$WARN" -o $WARN -lt 30 ] && result 5
+[ -z "$CRIT" -o $CRIT -lt 60 ] && result 5
+
+# If the disabled lockfile is not given as a param try to find it ourselves.
 [ -z "$agent_disabled_lockfile" ] && agent_disabled_lockfile=$($puppet_config_print agent_disabled_lockfile)
 # If there's a disabled.lock file don't look any further.
 [ -f "$agent_disabled_lockfile" ] && result 7
@@ -186,7 +208,7 @@ fi
 # Check if state file exists.
 [ -s $lastrunfile -a -r $lastrunfile ] || result 1
 
-# Check if daemonized was sent, else set default to 1.
+# Check if daemonized was set, else set default to 1.
 [ -n "$daemonized" ] || daemonized=1
 # If Puppet agent runs as a daemon there should be a process. We can't check so much when it is triggered by cron.
 if [ $daemonized -eq 1 ];then
@@ -225,9 +247,16 @@ fi
 last_run=$_time_last_run
 last_run_human=$(date -d @$last_run +%c)
 now=$(date +%s)
+
+# Check how long system been up in seconds
+uptime=$(cut -f1 -d' ' /proc/uptime | cut -f1 -d.)
+
+# Assess last run time relative to warn/crit values and system uptime.
 time_since_last=$((now-last_run))
-[ $time_since_last -ge $CRIT ] && result 3
-[ $time_since_last -ge $WARN ] && result 2
+[ $time_since_last -ge $CRIT -a $uptime -ge $CRIT ] && result 3
+[ $time_since_last -ge $CRIT -a $uptime -lt $CRIT ] && result 10
+[ $time_since_last -ge $WARN -a $uptime -ge $WARN ] && result 2
+[ $time_since_last -ge $WARN -a $uptime -lt $WARN ] && result 10
 
 # Get some more info from the yaml file.
 config=$_version_config
@@ -241,7 +270,7 @@ failed_to_restart=$_resources_failed_to_restart
 # If anything went wrong last run => crit.
 [ $failed -gt 0 -o  $failure -gt 0 -o $failed_to_restart -gt 0 ] && result 6
 
-# If we come here it works!
+# If we reached here all is ok.
 result 0
 
 # END

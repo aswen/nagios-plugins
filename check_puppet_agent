@@ -68,15 +68,16 @@ WARN=3600
 
 # FUNCTIONS
 result () {
+    
   case $1 in
-    0) echo "OK: Puppet agent $version running catalogversion $config, and executed at $last_run_human for last time";rc=0 ;;
-    1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete";rc=3 ;;
-    2) echo "WARNING: Last run was $time_since_last seconds ago. warn is $WARN";rc=1 ;;
-    3) echo "CRITICAL: Last run was $time_since_last seconds ago. crit is $CRIT";rc=2 ;;
+    0) echo "OK: Puppet agent $version running catalogversion $config, and executed at $last_run_human for last time | $PERF_DATA";rc=0 ;;
+    1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete | $PERF_DATA";rc=3 ;;
+    2) echo "WARNING: Last run was $time_since_last seconds ago. warn is $WARN | $PERF_DATA";rc=1 ;;
+    3) echo "CRITICAL: Last run was $time_since_last seconds ago. crit is $CRIT | $PERF_DATA";rc=2 ;;
     4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
-    6) echo "CRITICAL: Last run had 1 or more errors. Check the logs";rc=2 ;;
-    7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' $agent_disabled_lockfile)";rc=3 ;;
+    6) echo "CRITICAL: Last run had 1 or more errors. Check the logs | $PERF_DATA";rc=2 ;;
+    7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' $agent_disabled_lockfile) | $PERF_DATA";rc=3 ;;
     8) echo "UNKNOWN: No Puppet executable found";rc=3 ;;
     9) echo "UNKNOWN: Internal error: $2"; rc=3 ;;
   esac
@@ -93,12 +94,31 @@ usage () {
   echo "    -l Agent_disabled_lockfile (default: /var/lib/puppet/state/agent_disabled.lock)"
   echo "    -s Lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
   echo "    -w Warning threshold (default 3600 seconds)"
+  echo "    -P enable perf_data in the output"
   echo ""
   exit 1
 }
 
+# Get a flat representation of yaml without relying on external tools.
+function parse_yaml {
+   local prefix=$2
+   local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
+   sed -ne "s|^\($s\):|\1|" \
+        -e "s|^\($s\)\($w\)$s:$s[\"']\(.*\)[\"']$s\$|\1$fs\2$fs\3|p" \
+        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $1 |
+   awk -F$fs '{
+      indent = length($1)/2;
+      vname[indent] = $2;
+      for (i in vname) {if (i > indent) {delete vname[i]}}
+      if (length($3) > 0) {
+         vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
+         printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
+      }
+   }' 
+}
+
 # SCRIPT
-while getopts "c:d:hl:s:w:" opt; do
+while getopts "c:d:hl:s:w:P" opt; do
   case $opt in
     c)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -126,6 +146,9 @@ while getopts "c:d:hl:s:w:" opt; do
       else
         usage
       fi
+    ;;
+    P)
+      PERF=true
     ;;
     *)
       usage
@@ -181,8 +204,21 @@ if [ $daemonized -eq 1 ];then
   fi
 fi
 
+# parse last run file
+eval $(parse_yaml $lastrunfile)
+# this flattens the hierarchy to single-level name/value variables, eg:
+# _events_total="14"
+# _version_config="1448907293"
+
+# Construct perf data using anything that starts with "_resources_ or _time_"
+if [ -n "$PERF" ] ; then
+  for V in $(compgen -v | grep "_resources_\|_time_total_") ; do
+   PERF_DATA="$(echo $V | sed 's/^_//')=${!V} ${PERF_DATA}"
+  done
+fi
+
 # Check when last run happened.
-last_run=$(awk '/last_run:/ {print $2}' $lastrunfile)
+last_run=$_time_last_run
 last_run_human=$(date -d @$last_run +%c)
 now=$(date +%s)
 time_since_last=$((now-last_run))
@@ -190,11 +226,11 @@ time_since_last=$((now-last_run))
 [ $time_since_last -ge $WARN ] && result 2
 
 # Get some more info from the yaml file.
-config=$(awk '/config:/ {print $2}' $lastrunfile)
-version=$(awk '/puppet:/ {print $2}' $lastrunfile)
-failed=$(awk '/failed:/ {print $2}' $lastrunfile)
-failure=$(awk '/failure:/ {print $2}' $lastrunfile)
-failed_to_restart=$(awk '/failed_to_restart:/ {print $2}' $lastrunfile)
+config=$_version_config
+version=$_version_puppet
+failed=$_resources_failed
+failure=$_events_failure
+failed_to_restart=$_resources_failed_to_restart
 
 # If any of the values above doesn't return raise an error.
 [ -z "$last_run" -o -z "$config" -o -z "$version" -o -z "$failed" -o -z "$failure" -o -z "$failed_to_restart" ] && result 1

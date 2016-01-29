@@ -80,6 +80,7 @@
 #                       We never generally want puppet disabled so change to warning.
 # 20151229  A.Swen      Fix bug in PERF_DATA (replace compset by set).
 #                       Prettify $PERF_DATA output.
+# 20160130  J.O. Kröpke Fix ps deamon check for puppet 4
 
 # FUNCTIONS
 result () {

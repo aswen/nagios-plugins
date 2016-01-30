@@ -80,6 +80,7 @@
 #                       We never generally want puppet disabled so change to warning.
 # 20151229  A.Swen      Fix bug in PERF_DATA (replace compset by set).
 #                       Prettify $PERF_DATA output.
+# 20160130  J.O. Kröpke Puppet 4 compability
 
 # FUNCTIONS
 result () {
@@ -108,6 +109,7 @@ usage () {
   echo "    -h Show this help."
   echo "    -l Agent_disabled_lockfile (default: /var/lib/puppet/state/agent_disabled.lock)"
   echo "    -s Lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
+  echo "    -p agent pid file (default: /var/puppet/run/agent.pid)"
   echo "    -w Warning threshold (default 3600 seconds)"
   echo "    -P Enable perf_data in the output"
   echo ""
@@ -133,7 +135,7 @@ parse_yaml () {
 }
 
 # SCRIPT
-while getopts "c:d:hl:s:w:P" opt; do
+while getopts "c:d:hl:s:w:p:P" opt; do
   case $opt in
     c)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -154,6 +156,7 @@ while getopts "c:d:hl:s:w:P" opt; do
     h) usage ;;
     l) agent_disabled_lockfile=$OPTARG ;;
     s) lastrunfile=$OPTARG ;;
+    p) pidfile=$OPTARG ;;
     w)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
       then
@@ -215,10 +218,10 @@ splay=$($puppet_config_print splay)
 # If Puppet agent runs as a daemon there should be a process. We can't check so much when it is triggered by cron.
 if [ $daemonized -eq 1 ];then
   # Check puppet daemon:
-  [ "$(ps axfww|egrep "/usr(/local)?/bin/ruby[^ ]* /usr(/local)?/s?bin/puppetd?"|grep -v egrep)" ] || result 4
+  [ "$(ps axfww|egrep "(/opt/puppetlabs/puppet|/usr(/local)?)/bin/ruby[^ ]* (/opt/puppetlabs/puppet|/usr(/local)?)?/s?bin/puppetd?"|grep -v egrep)" ] || result 4
 
   uname -a|grep -q BSD && default_pidfile=/var/puppet/run/agent.pid || default_pidfile=/var/run/puppet/agent.pid
-  [ -e $default_pidfile ] && pidfile=$default_pidfile || pidfile=$($puppet_config_print pidfile)
+  [ -z $pidfile ] && ( [ -e $default_pidfile ] && pidfile=$default_pidfile || pidfile=$($puppet_config_print pidfile) )
 
   # If there is a pidfile tell me the pid, else fail.
   [ -f $pidfile ]&&pid=$(cat $pidfile)||result 4
@@ -232,8 +235,10 @@ if [ $daemonized -eq 1 ];then
   fi
 fi
 
+[ $puppet_major_version -ge 3 ] && prefix=_
+
 # parse last run file
-eval $(parse_yaml $lastrunfile)
+eval $(parse_yaml $lastrunfile $prefix)
 # this flattens the hierarchy to single-level name/value variables, eg:
 # _events_total="14"
 # _version_config="1448907293"

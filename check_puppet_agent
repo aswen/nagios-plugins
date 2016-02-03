@@ -80,6 +80,8 @@
 #                       We never generally want puppet disabled so change to warning.
 # 20151229  A.Swen      Fix bug in PERF_DATA (replace compset by set).
 #                       Prettify $PERF_DATA output.
+# 20160201  S. Sams     Changes to PERF_DATA output format to increase compatibility with Nagios Plugin guidelines.
+#                       Add compatibility with Puppet 4.x
 
 # FUNCTIONS
 result () {
@@ -173,6 +175,8 @@ done
 
 [ -z "$HOME" ] && export HOME=~  # Some clean environment situations make puppet -V fail.
 
+# Ensure installation directory of puppet 4 is included in PATH
+PATH="$PATH:/opt/puppetlabs/bin"
 # Find location of puppet executable.
 PUPPET=$(which puppet) || result 8
 
@@ -214,10 +218,19 @@ splay=$($puppet_config_print splay)
 [ -n "$daemonized" ] || daemonized=1
 # If Puppet agent runs as a daemon there should be a process. We can't check so much when it is triggered by cron.
 if [ $daemonized -eq 1 ];then
-  # Check puppet daemon:
-  [ "$(ps axfww|egrep "/usr(/local)?/bin/ruby[^ ]* /usr(/local)?/s?bin/puppetd?"|grep -v egrep)" ] || result 4
+  # Puppet version 4 changed several paths, determine correct ones
+  if [ $puppet_major_version -ge 4 ];then
+    puppet_daemon_rundir="puppetlabs"
+    puppet_daemon_regex="/opt/puppetlabs/puppet/bin/ruby /opt/puppetlabs/puppet/bin/puppet"
+  else
+    puppet_daemon_rundir="puppet"
+    puppet_daemon_regex="/usr(/local)?/bin/ruby[^ ]* /usr(/local)?/s?bin/puppetd?"
+  fi
 
-  uname -a|grep -q BSD && default_pidfile=/var/puppet/run/agent.pid || default_pidfile=/var/run/puppet/agent.pid
+  # Check puppet daemon:
+  [ "$(ps axfww|egrep "$puppet_daemon_regex"|grep -v egrep)" ] || result 4
+
+  uname -a|grep -q BSD && default_pidfile=/var/$puppet_daemon_rundir/run/agent.pid || default_pidfile=/var/run/$puppet_daemon_rundir/agent.pid
   [ -e $default_pidfile ] && pidfile=$default_pidfile || pidfile=$($puppet_config_print pidfile)
 
   # If there is a pidfile tell me the pid, else fail.
@@ -233,18 +246,19 @@ if [ $daemonized -eq 1 ];then
 fi
 
 # parse last run file
-eval $(parse_yaml $lastrunfile)
+# puppet version 4 files have less intendation, add prefix to match parsed variables from older versions
+[ $puppet_major_version -ge 4 ] && yaml_prefix="_"
+eval $(parse_yaml $lastrunfile $yaml_prefix)
 # this flattens the hierarchy to single-level name/value variables, eg:
 # _events_total="14"
 # _version_config="1448907293"
 
-# Construct perf data using anything that starts with "_resources_ or _time_"
+# Construct perf data using anything that starts with "_resources_ or _time_total"
 if [ -n "$PERF" ] ; then
-  for V in $(set | grep "^_resources_\|^_time_total_") ; do
-   PERF_DATA="$(echo $V | sed 's/^_//'), $PERF_DATA"
+  for V in $(set | grep "^_resources_\|^_time_total") ; do
+   PERF_DATA="$(echo $V | sed 's/^_//' | sed "s/='/=/" | sed "s/'$//") $PERF_DATA"
   done
-  # Strip last "," from PERF_DATA
-  PERF_DATA=${PERF_DATA%, }
+  PERF_DATA="| $PERF_DATA"
 fi
 
 # Check when last run happened.

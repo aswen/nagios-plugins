@@ -82,6 +82,7 @@
 #                       Prettify $PERF_DATA output.
 # 20160201  S. Sams     Changes to PERF_DATA output format to increase compatibility with Nagios Plugin guidelines.
 #                       Add compatibility with Puppet 4.x
+# 20160315  J. Yaworski Add -v, allowing to pass a version to compare
 
 # FUNCTIONS
 result () {
@@ -97,6 +98,7 @@ result () {
     8) echo "UNKNOWN: No Puppet executable found";rc=3 ;;
     9) echo "UNKNOWN: Internal error: $2"; rc=3 ;;
    10) echo "OK (PROBABLY): Puppet agent last successful run $last_run_human (runinterval $runinterval, splay $splay, splaylimit $splay limit) but system has not been up long enough to guarantee a fresh puppet run should have occurred";rc=0 ;;
+   11) echo "INFO: Puppet agent is version $version, but should be $wanted_version. $PERF_DATA";rc=0 ;;
   esac
   exit $rc
 }
@@ -104,7 +106,7 @@ result () {
 usage () {
   echo ""
   echo "USAGE: "
-  echo "  $0 [-c 7200] [-d0] [-l agent_disabled_lockfile] [-s lastrunfile] [-w 3600]"
+  echo "  $0 [-c 7200] [-d0] [-l agent_disabled_lockfile] [-s lastrunfile] [-w 3600] [-v wanted_version]"
   echo "    -c Critical threshold (default 7200 seconds)"
   echo "    -d 0|1: puppet agent should be a daemon(1) or not (0).(default 1)"
   echo "    -h Show this help."
@@ -112,6 +114,7 @@ usage () {
   echo "    -s Lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
   echo "    -w Warning threshold (default 3600 seconds)"
   echo "    -P Enable perf_data in the output"
+  echo "    -v The version of puppet that should be running"
   echo ""
   exit 1
 }
@@ -135,7 +138,7 @@ parse_yaml () {
 }
 
 # SCRIPT
-while getopts "c:d:hl:s:w:P" opt; do
+while getopts "c:d:hl:s:w:Pv:" opt; do
   case $opt in
     c)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -166,6 +169,9 @@ while getopts "c:d:hl:s:w:P" opt; do
     ;;
     P)
       PERF=true
+    ;;
+    v)
+      wanted_version=$OPTARG
     ;;
     *)
       usage
@@ -287,6 +293,11 @@ failed_to_restart=$_resources_failed_to_restart
 [ -z "$last_run" -o -z "$config" -o -z "$version" -o -z "$failed" -o -z "$failure" -o -z "$failed_to_restart" ] && result 1
 # If anything went wrong last run => crit.
 [ $failed -gt 0 -o  $failure -gt 0 -o $failed_to_restart -gt 0 ] && result 6
+
+# If $wanted_version is set, compare it to the running version
+if [ -n "$wanted_version" -a -n "$version" ]; then
+  [ "$wanted_version" != "$version" ] && result 11
+fi
 
 # If we reached here all is ok.
 result 0

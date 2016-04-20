@@ -44,7 +44,7 @@
 #                        /usr/bin/puppet config print agent_disabled_lockfile,\
 #                        /usr/bin/puppet config print lastrunfile,\
 #                        /usr/bin/puppet config print pidfile
-# NAGIOS     NOPASSWD:PUPPETCHECK
+# NAGIOS     ALL=NOPASSWD:PUPPETCHECK
 #
 # CHANGELOG:
 # 20120126	A.Swen	    created.

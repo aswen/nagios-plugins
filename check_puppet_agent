@@ -99,6 +99,8 @@ result () {
     9) echo "UNKNOWN: Internal error: $2"; rc=3 ;;
    10) echo "OK (PROBABLY): Puppet agent last successful run $last_run_human (runinterval $runinterval, splay $splay, splaylimit $splay limit) but system has not been up long enough to guarantee a fresh puppet run should have occurred";rc=0 ;;
    11) echo "INFO: Puppet agent is version $version, but should be $wanted_version. $PERF_DATA";rc=0 ;;
+   12) echo "OK: Puppet master running";rc=0 ;;
+   13) echo "CRITICAL: Puppet master is not running";rc=2 ;;
   esac
   exit $rc
 }
@@ -138,7 +140,7 @@ parse_yaml () {
 }
 
 # SCRIPT
-while getopts "c:d:hl:s:w:Pv:" opt; do
+while getopts "c:d:hl:r:s:w:Pv:" opt; do
   case $opt in
     c)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -158,6 +160,14 @@ while getopts "c:d:hl:s:w:Pv:" opt; do
     ;;
     h) usage ;;
     l) agent_disabled_lockfile=$OPTARG ;;
+    r)
+      # if master, make it so, otherwise default to agent
+      if [ "$OPTARG" = "master" ];then
+        role=$OPTARG
+      else
+        role='agent'
+      fi
+    ;;
     s) lastrunfile=$OPTARG ;;
     w)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -193,9 +203,9 @@ puppet_major_version=$($PUPPET -V|cut -d. -f1)
 
 # Set Puppet configprint syntax.
 if [ $puppet_major_version -ge 3 ];then
-  puppet_config_print="sudo $PUPPET config print"
+  puppet_config_print="$PUPPET config print"
 else
-  puppet_config_print="sudo $PUPPET --configprint"
+  puppet_config_print="$PUPPET --configprint"
 fi
 
 # construct WARN and CRIT times based on runinterval plus a safety buffer
@@ -218,23 +228,34 @@ splay=$($puppet_config_print splay)
 # If the lastrunfile is not given as a param try to find it ourselves.
 [ -z "$lastrunfile" ] && lastrunfile=$($puppet_config_print lastrunfile)
 # Check if state file exists.
-[ -s $lastrunfile -a -r $lastrunfile ] || result 1
+if [ "$role" = "agent" ]; then
+  [ -s $lastrunfile -a -r $lastrunfile ] || result 1
+fi
 
 # Check if daemonized was set, else set default to 1.
 [ -n "$daemonized" ] || daemonized=1
 # If Puppet agent runs as a daemon there should be a process. We can't check so much when it is triggered by cron.
 if [ $daemonized -eq 1 ];then
+  puppet_daemon_error=4
   # Puppet version 4 changed several paths, determine correct ones
   if [ $puppet_major_version -ge 4 ];then
     puppet_daemon_rundir="puppetlabs"
     puppet_daemon_regex="/opt/puppetlabs/puppet/bin/ruby /opt/puppetlabs/puppet/bin/puppet"
   else
     puppet_daemon_rundir="puppet"
-    puppet_daemon_regex="/usr(/local)?/bin/ruby[^ ]* /usr(/local)?/s?bin/puppetd?"
+    if [ "$role" = "master" ];then
+      puppet_daemon_regex="/usr(/local)?/bin/ruby[^ ]* /usr(/local)?/s?bin/puppetmaster(d)?$"
+      puppet_daemon_error=13
+    else
+      puppet_daemon_regex="/usr(/local)?/bin/ruby[^ ]* /usr(/local)?/s?bin/puppet(d)?$"
+    fi
   fi
 
-  # Check puppet daemon:
-  [ "$(ps axfww|egrep "$puppet_daemon_regex"|grep -v egrep)" ] || result 4
+  # Check daemon
+  [ "$(ps axfww|egrep "$puppet_daemon_regex"|grep -v egrep)" ] || result $puppet_daemon_error
+
+  # If master we only need to know process is running
+  [ "$role" = "master" ] && result 12
 
   uname -a|grep -q BSD && default_pidfile=/var/$puppet_daemon_rundir/run/agent.pid || default_pidfile=/var/run/$puppet_daemon_rundir/agent.pid
   [ -e $default_pidfile ] && pidfile=$default_pidfile || pidfile=$($puppet_config_print pidfile)

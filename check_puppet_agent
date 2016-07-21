@@ -179,7 +179,7 @@ while getopts "c:d:hl:s:w:Pv:" opt; do
   esac
 done
 
-[ -z "$HOME" ] && export HOME=~  # Some clean environment situations make puppet -V fail.
+[ -z "$HOME" ] && export HOME=$(getent passwd `whoami` | cut -d: -f6)  # Some clean environment situations make puppet -V fail.
 
 # Ensure installation directory of puppet 4 is included in PATH
 PATH="$PATH:/opt/puppetlabs/bin"

@@ -43,6 +43,7 @@
 #                        /usr/bin/puppet config print splaylimit,\
 #                        /usr/bin/puppet config print agent_disabled_lockfile,\
 #                        /usr/bin/puppet config print lastrunfile,\
+#                        /usr/bin/puppet config print lastrunreport,\
 #                        /usr/bin/puppet config print pidfile
 # NAGIOS     ALL=NOPASSWD:PUPPETCHECK
 #
@@ -83,6 +84,7 @@
 # 20160201  S. Sams     Changes to PERF_DATA output format to increase compatibility with Nagios Plugin guidelines.
 #                       Add compatibility with Puppet 4.x
 # 20160315  J. Yaworski Add -v, allowing to pass a version to compare
+# 20160815  L. Buriola  Add -E to show first error on output
 
 # FUNCTIONS
 result () {
@@ -93,12 +95,13 @@ result () {
     3) echo "CRITICAL: Last run was $time_since_last seconds ago. Crit is $CRIT. $PERF_DATA";rc=2 ;;
     4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
-    6) echo "CRITICAL: Last run had 1 or more errors. Check the logs. $PERF_DATA";rc=2 ;;
+    6) echo "CRITICAL: Last run had 1 or more errors. Check the logs. $FIRST_ERROR $PERF_DATA";rc=2 ;;
     7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' $agent_disabled_lockfile). $PERF_DATA";rc=1 ;;
     8) echo "UNKNOWN: No Puppet executable found";rc=3 ;;
     9) echo "UNKNOWN: Internal error: $2"; rc=3 ;;
    10) echo "OK (PROBABLY): Puppet agent last successful run $last_run_human (runinterval $runinterval, splay $splay, splaylimit $splay limit) but system has not been up long enough to guarantee a fresh puppet run should have occurred";rc=0 ;;
    11) echo "INFO: Puppet agent is version $version, but should be $wanted_version. $PERF_DATA";rc=0 ;;
+   12) echo "UNKNOWN: last_run_report.yaml not found, not readable or incomplete";rc=3 ;;
   esac
   exit $rc
 }
@@ -106,14 +109,16 @@ result () {
 usage () {
   echo ""
   echo "USAGE: "
-  echo "  $0 [-c 7200] [-d0] [-l agent_disabled_lockfile] [-s lastrunfile] [-w 3600] [-v wanted_version]"
+  echo "  $0 [-c 7200] [-w 3600] [-d 0] [-l agent_disabled_lockfile] [-s lastrunfile] [-r lastrunreport] [-v wanted_version] [-PEh]"
   echo "    -c Critical threshold (default 7200 seconds)"
+  echo "    -w Warning threshold (default 3600 seconds)"
   echo "    -d 0|1: puppet agent should be a daemon(1) or not (0).(default 1)"
   echo "    -h Show this help."
   echo "    -l Agent_disabled_lockfile (default: /var/lib/puppet/state/agent_disabled.lock)"
   echo "    -s Lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
-  echo "    -w Warning threshold (default 3600 seconds)"
+  echo "    -r Lastrunreport (default: /var/lib/puppet/state/last_run_report.yaml)"
   echo "    -P Enable perf_data in the output"
+  echo "    -E Show first error in the output"
   echo "    -v The version of puppet that should be running"
   echo ""
   exit 1
@@ -137,8 +142,16 @@ parse_yaml () {
    }'
 }
 
+# Get first error from last_run_report.yaml
+get_first_error() {
+  grep_cmd="/bin/grep -B 3 -A 1"
+  first_error_time=$($grep_cmd "status: failure" $lastrunreport | grep "time: " | sort -n | head -1)
+  first_error=$($grep_cmd "$first_error_time" $lastrunreport | grep "message: " | sed 's/.*message: //' | head -1)
+  echo "FIRST_ERROR ($first_error)"
+}
+
 # SCRIPT
-while getopts "c:d:hl:s:w:Pv:" opt; do
+while getopts "c:d:l:s:r:w:v:PEh" opt; do
   case $opt in
     c)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -159,6 +172,7 @@ while getopts "c:d:hl:s:w:Pv:" opt; do
     h) usage ;;
     l) agent_disabled_lockfile=$OPTARG ;;
     s) lastrunfile=$OPTARG ;;
+    r) lastrunreport=$OPTARG ;;
     w)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
       then
@@ -169,6 +183,9 @@ while getopts "c:d:hl:s:w:Pv:" opt; do
     ;;
     P)
       PERF=true
+    ;;
+    E)
+      SHOW_ERROR=true
     ;;
     v)
       wanted_version=$OPTARG
@@ -220,6 +237,11 @@ splay=$($puppet_config_print splay)
 # Check if state file exists.
 [ -s $lastrunfile -a -r $lastrunfile ] || result 1
 
+# If the lastrunreport is not given as a param try to find it ourselves.
+[ -z "$lastrunreport" ] && lastrunreport=$($puppet_config_print lastrunreport)
+# Check if state file exists.
+[ -s $lastrunreport -a -r $lastrunreport ] || result 12
+
 # Check if daemonized was set, else set default to 1.
 [ -n "$daemonized" ] || daemonized=1
 # If Puppet agent runs as a daemon there should be a process. We can't check so much when it is triggered by cron.
@@ -265,6 +287,11 @@ if [ -n "$PERF" ] ; then
    PERF_DATA="$(echo $V | sed 's/^_//' | sed "s/='/=/" | sed "s/'$//") $PERF_DATA"
   done
   PERF_DATA="| $PERF_DATA"
+fi
+
+# Construct FIRST_ERROR using last_run_report.yaml
+if [ -n "$SHOW_ERROR" ] ; then
+  FIRST_ERROR=$(get_first_error)
 fi
 
 # Check when last run happened.

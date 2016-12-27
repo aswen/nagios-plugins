@@ -240,7 +240,7 @@ splay=$($puppet_config_print splay)
 # If the lastrunreport is not given as a param try to find it ourselves.
 [ -z "$lastrunreport" ] && lastrunreport=$($puppet_config_print lastrunreport)
 # Check if state file exists.
-[ -s $lastrunreport -a -r $lastrunreport ] || result 12
+[ -n "$SHOW_ERROR" ] && ( [ -s $lastrunreport -a -r $lastrunreport ] || result 12 )
 
 # Check if daemonized was set, else set default to 1.
 [ -n "$daemonized" ] || daemonized=1

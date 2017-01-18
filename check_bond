@@ -28,9 +28,11 @@
 #  command[check_bond]=/usr/lib/nagios/plugins/check_bond
 # This should warn when one of the slaves is down and go critical when the whole bond is not available.
 # This plugin defaults to bond0. If you have multiple bonds you can tell the script so by adding -i <if>.
+# It will also warn if the Currently Active Slave is not the expected primary interface,
+# the default primary interface is eth0, You can override this with -p <if>
 
 #  if you have dont_blame_nrpe=1 set you can choose to
-#  command[check_bond]=/usr/lib/nagios/plugins/check_bond -i $ARG1$
+#  command[check_bond]=/usr/lib/nagios/plugins/check_bond -i $ARG1$ -p $ARG2$
 #
 # define service {
 #  use generic-service
@@ -38,6 +40,8 @@
 #  check_command check_nrpe!check_bond
 # or
 #  check_command check_nrpe!check_bond!bond1
+# or
+#  check_command check_nrpe!check_bond!bond1!eth1
 #}
 #
 
@@ -46,13 +50,16 @@
 # ------------------------------------------
 # Who    When      What
 # ---    ----      ----
-# A.Swen 2011-09-07 Add support for other bond module than bond0 (defaults to bond0 however)
-# A.Swen 2013-10-11 Remove some obsolete stuff and make the script shorter
+# A.Swen  2011-09-07 Add support for other bond module than bond0 (defaults to bond0 however)
+# A.Swen  2013-10-11 Remove some obsolete stuff and make the script shorter
+# B.Potts 2017-01-16 Check and display expected primary interface on bond
 #
 #
 # SETTINGS
 # Default if is bond0
 if=bond0
+# Default pri is eth0
+pri=eth0
 
 # commands
 GREP=/bin/grep
@@ -61,10 +68,11 @@ LSMOD=/sbin/lsmod
 
 # FUNCTIONS
 get_options () {
-  [ $# -gt 0 ]||usage
-  while getopts "i:" opt;do
+  [ $# -gt 0 ]||result 5
+  while getopts "i:p:" opt;do
     case ${opt} in
       i) export if=`echo ${OPTARG}` ;;
+      p) export pri=`echo ${OPTARG}` ;;
       *) result 5;;
     esac
 done
@@ -72,13 +80,14 @@ done
 
 result () {
   case $1 in
-    0) echo "OK: - Bondingmode: $(grep "Bonding Mode:" /proc/net/bonding/${if})";;
+    0) echo "OK: - Bondingmode: $(grep "Bonding Mode:" /proc/net/bonding/${if}), active link: $2";;
     1) echo "UNKNOWN: plugin error";rc=3;;
     2) echo "CRITICAL: bonding module not loaded";rc=2;;
     3) echo "WARNING: state of ${if} device $2 is $3";rc=1;;
     4) echo "UNKNOWN: no bondinterface with name ${if} found";rc=3;;
-    5) echo "UNKNOWN: Usage: ${me} [-i <bond interface name>]";rc=3;;
+    5) echo "UNKNOWN: Usage: ${me} [-i <bond interface name>] [-p <expected primary interface name>]";rc=3;;
     6) echo "CRITICAL: bondinterface ${if} has no active slaves";rc=2;;
+    7) echo "WARNING: Bondingmode: $(grep "Bonding Mode:" /proc/net/bonding/${if}), (unexpected) active link: $2";rc=1;;
   esac
 }
 
@@ -87,10 +96,10 @@ result () {
 rc=0
 
 # test if this script was called correctly
-[ $# -eq 1 -o $# -gt 2 ] && result 5
+[ $# -eq 1 -o $# -eq 3 -o $# -gt 4 ] && result 5
 [ $rc -gt 0 ] && exit $rc
 
-[ $# -eq 2 ] && get_options $@
+[ $# -eq 2 -o $# -eq 4 ] && get_options $@
 [ $rc -gt 0 ] && exit $rc
 
 # 1st we check if bonding module is loaded
@@ -104,6 +113,7 @@ rc=0
 # Inspect the state of the entire bond interface
 ifstate=$(${AWK} '/Currently Active Slave/ {print $4}' /proc/net/bonding/${if})
 [ "${ifstate}" = "None" ]&& result 6
+[ "${ifstate}" = "${pri}" ] || result 7 "${ifstate}"
 [ $rc -gt 0 ] && exit $rc
 
 # test state of each if in bond
@@ -115,7 +125,7 @@ for ethdev in ${ethdevs};do
   fi
 done
 
-[ $rc -eq 0 ] && result 0
+[ $rc -eq 0 ] && result 0 "${ifstate}"
 exit $rc
 
 #END

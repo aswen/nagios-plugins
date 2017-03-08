@@ -209,11 +209,17 @@ puppet_major_version=$($PUPPET -V|cut -d. -f1)
 [ -z "$puppet_major_version" ] && result 9 "Puppet version unknown from $($PUPPET -V 2>&1)"
 
 # Set Puppet configprint syntax.
-if [ $puppet_major_version -ge 3 ];then
-  puppet_config_print="sudo $PUPPET config print --section agent"
-else
-  puppet_config_print="sudo $PUPPET --configprint"
-fi
+case $puppet_major_version in
+  2)
+    puppet_config_print="sudo $PUPPET --configprint"
+    ;;
+  3)
+    puppet_config_print="sudo $PUPPET config print"
+    ;;
+  *)
+    puppet_config_print="sudo $PUPPET config print --section agent"
+    ;;
+esac
 
 # construct WARN and CRIT times based on runinterval plus a safety buffer
 # if they have not already been explicitly set

@@ -85,6 +85,7 @@
 #                       Add compatibility with Puppet 4.x
 # 20160315  J. Yaworski Add -v, allowing to pass a version to compare
 # 20160815  L. Buriola  Add -E to show first error on output
+# 20170426  benwtr      Detect failure to retrieve catalog from server as a warning.
 
 # FUNCTIONS
 result () {
@@ -102,6 +103,7 @@ result () {
    10) echo "OK (PROBABLY): Puppet agent last successful run $last_run_human (runinterval $runinterval, splay $splay, splaylimit $splay limit) but system has not been up long enough to guarantee a fresh puppet run should have occurred";rc=0 ;;
    11) echo "INFO: Puppet agent is version $version, but should be $wanted_version. $PERF_DATA";rc=0 ;;
    12) echo "UNKNOWN: last_run_report.yaml not found, not readable or incomplete";rc=3 ;;
+   13) echo "WARNING: Failed to retrieve catalog on last run.";rc=1 ;;
   esac
   exit $rc
 }
@@ -299,6 +301,9 @@ fi
 if [ -n "$SHOW_ERROR" ] ; then
   FIRST_ERROR=$(get_first_error)
 fi
+
+# If the last run failed to retrieve the catalog from the server
+grep -q 'message: "Could not retrieve catalog from remote server' $lastrunreport && result 13
 
 # Check when last run happened.
 last_run=$_time_last_run

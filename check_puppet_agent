@@ -88,6 +88,23 @@
 # 20170426  benwtr      Detect failure to retrieve catalog from server as a warning.
 # 20170925  J Grammenos Add parameter to disable last run time
 
+# DEFAULTS
+# Explicitly set the PATH to that of ENV_SUPATH in /etc/login.defs and unset
+# various other variables. For details, see:
+# https://wiki.ubuntu.com/SecurityTeam/AppArmorPolicyReview#Execute_rules
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export ENV=
+export BASH_ENV=
+export CDPATH=
+export GLOBIGNORE=
+export BASH_XTRACEFD=
+
+# SETTINGS
+PUPPET_CRON=true
+CRIT=7200
+WARN=3600
+PERF=false
+
 # FUNCTIONS
 result () {
   case $1 in

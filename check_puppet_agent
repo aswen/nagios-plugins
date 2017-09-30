@@ -222,6 +222,14 @@ while getopts "c:d:l:s:r:w:v:PEhD" opt; do
   esac
 done
 
+parse_puppet_config () {
+  echo "$puppet_config_output" | while read key value; do
+    if [ "$key" = "$1" ]; then
+        echo "${value#= }"
+    fi
+  done
+}
+
 [ -z "$HOME" ] && export HOME=$(getent passwd `whoami` | cut -d: -f6)  # Some clean environment situations make puppet -V fail.
 
 # Ensure installation directory of puppet 4 is included in PATH
@@ -247,12 +255,13 @@ case $puppet_major_version in
     ;;
 esac
 
+puppet_config_output="$($puppet_config_print)"
 # construct WARN and CRIT times based on runinterval plus a safety buffer
 # if they have not already been explicitly set
-runinterval=$($puppet_config_print runinterval)
+runinterval=$(parse_puppet_config "runinterval")
 splaylimit=0
-splay=$($puppet_config_print splay)
-[ "$splay" != "false" ] && splaylimit=$($puppet_config_print splaylimit)
+splay=$(parse_puppet_config "splay")
+[ "$splay" != "false" ] && splaylimit=$(parse_uppet_config "splaylimit")
 [ -z "$WARN" ] && WARN=$(($runinterval + $splaylimit))
 [ -z "$CRIT" ] && CRIT=$(($WARN + $runinterval))
 #now check we finally have some sensible settings
@@ -260,17 +269,17 @@ splay=$($puppet_config_print splay)
 [ -z "$CRIT" -o $CRIT -lt 60 ] && result 5
 
 # If the disabled lockfile is not given as a param try to find it ourselves.
-[ -z "$agent_disabled_lockfile" ] && agent_disabled_lockfile=$($puppet_config_print agent_disabled_lockfile)
+[ -z "$agent_disabled_lockfile" ] && agent_disabled_lockfile=$(parse_puppet_config "agent_disabled_lockfile")
 # If there's a disabled.lock file don't look any further.
 [ -f "$agent_disabled_lockfile" ] && result 7
 
 # If the lastrunfile is not given as a param try to find it ourselves.
-[ -z "$lastrunfile" ] && lastrunfile=$($puppet_config_print lastrunfile)
+[ -z "$lastrunfile" ] && lastrunfile=$(parse_puppet_config "lastrunfile")
 # Check if state file exists.
 [ -s $lastrunfile -a -r $lastrunfile ] || result 1
 
 # If the lastrunreport is not given as a param try to find it ourselves.
-[ -z "$lastrunreport" ] && lastrunreport=$($puppet_config_print lastrunreport)
+[ -z "$lastrunreport" ] && lastrunreport=$(parse_puppet_config "lastrunreport")
 # Check if state file exists.
 [ -n "$SHOW_ERROR" ] && ( [ -s $lastrunreport -a -r $lastrunreport ] || result 12 )
 
@@ -291,7 +300,7 @@ if [ $daemonized -eq 1 ];then
   [ "$(ps axfww|egrep "$puppet_daemon_regex"|grep -v egrep)" ] || result 4
 
   uname -a|grep -q BSD && default_pidfile=/var/$puppet_daemon_rundir/run/agent.pid || default_pidfile=/var/run/$puppet_daemon_rundir/agent.pid
-  [ -e $default_pidfile ] && pidfile=$default_pidfile || pidfile=$($puppet_config_print pidfile)
+  [ -e $default_pidfile ] && pidfile=$default_pidfile || pidfile=$(parse_puppet_config "pidfile")
 
   # If there is a pidfile tell me the pid, else fail.
   [ -f $pidfile ]&&pid=$(cat $pidfile)||result 4

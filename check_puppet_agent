@@ -86,24 +86,6 @@
 # 20160315  J. Yaworski Add -v, allowing to pass a version to compare
 # 20160815  L. Buriola  Add -E to show first error on output
 # 20170426  benwtr      Detect failure to retrieve catalog from server as a warning.
-# 20170925  J Grammenos Add parameter to disable last run time
-
-# DEFAULTS
-# Explicitly set the PATH to that of ENV_SUPATH in /etc/login.defs and unset
-# various other variables. For details, see:
-# https://wiki.ubuntu.com/SecurityTeam/AppArmorPolicyReview#Execute_rules
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-export ENV=
-export BASH_ENV=
-export CDPATH=
-export GLOBIGNORE=
-export BASH_XTRACEFD=
-
-# SETTINGS
-PUPPET_CRON=true
-CRIT=7200
-WARN=3600
-PERF=false
 
 # FUNCTIONS
 result () {
@@ -122,8 +104,6 @@ result () {
    11) echo "INFO: Puppet agent is version $version, but should be $wanted_version. $PERF_DATA";rc=0 ;;
    12) echo "UNKNOWN: last_run_report.yaml not found, not readable or incomplete";rc=3 ;;
    13) echo "WARNING: Failed to retrieve catalog on last run.";rc=1 ;;
-   14) echo "WARNING: Last run was $time_since_last seconds ago. Warn is $WARN. $PERF_DATA";rc=0 ;;
-   15) echo "CRITICAL: Last run was $time_since_last seconds ago. Crit is $CRIT. $PERF_DATA";rc=0 ;;
   esac
   exit $rc
 }
@@ -131,7 +111,7 @@ result () {
 usage () {
   echo ""
   echo "USAGE: "
-  echo "  $0 [-c 7200] [-w 3600] [-d 0] [-l agent_disabled_lockfile] [-s lastrunfile] [-r lastrunreport] [-v wanted_version] [-PEhD]"
+  echo "  $0 [-c 7200] [-w 3600] [-d 0] [-l agent_disabled_lockfile] [-s lastrunfile] [-r lastrunreport] [-v wanted_version] [-PEh]"
   echo "    -c Critical threshold (default 7200 seconds)"
   echo "    -w Warning threshold (default 3600 seconds)"
   echo "    -d 0|1: puppet agent should be a daemon(1) or not (0).(default 1)"
@@ -142,7 +122,6 @@ usage () {
   echo "    -P Enable perf_data in the output"
   echo "    -E Show first error in the output"
   echo "    -v The version of puppet that should be running"
-  echo "    -D disable crit and warn for last run time"
   echo ""
   exit 1
 }
@@ -174,7 +153,7 @@ get_first_error() {
 }
 
 # SCRIPT
-while getopts "c:d:l:s:r:w:v:PEhD" opt; do
+while getopts "c:d:l:s:r:w:v:PEh" opt; do
   case $opt in
     c)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -213,9 +192,6 @@ while getopts "c:d:l:s:r:w:v:PEhD" opt; do
     v)
       wanted_version=$OPTARG
     ;;
-    D)
-      PUPPET_CRON=false
-    ;;    
     *)
       usage
     ;;
@@ -348,19 +324,10 @@ uptime=$(cut -f1 -d' ' /proc/uptime | cut -f1 -d.)
 
 # Assess last run time relative to warn/crit values and system uptime.
 time_since_last=$((now-last_run))
-if [ "$PUPPET_CRON" = "true" ]; then
-  [ $time_since_last -ge $CRIT -a $uptime -ge $CRIT ] && result 3
-  [ $time_since_last -ge $CRIT -a $uptime -lt $CRIT ] && result 10
-  [ $time_since_last -ge $WARN -a $uptime -ge $WARN ] && result 2
-  [ $time_since_last -ge $WARN -a $uptime -lt $WARN ] && result 10
-else
-  # puppet cron is disabled so dont warn and crit on last run time
-  [ $time_since_last -ge $CRIT -a $uptime -ge $CRIT ] && result 15
-  [ $time_since_last -ge $CRIT -a $uptime -lt $CRIT ] && result 10
-  [ $time_since_last -ge $WARN -a $uptime -ge $WARN ] && result 14
-  [ $time_since_last -ge $WARN -a $uptime -lt $WARN ] && result 10
-fi
-
+[ $time_since_last -ge $CRIT -a $uptime -ge $CRIT ] && result 3
+[ $time_since_last -ge $CRIT -a $uptime -lt $CRIT ] && result 10
+[ $time_since_last -ge $WARN -a $uptime -ge $WARN ] && result 2
+[ $time_since_last -ge $WARN -a $uptime -lt $WARN ] && result 10
 
 # Get some more info from the yaml file.
 config=$_version_config

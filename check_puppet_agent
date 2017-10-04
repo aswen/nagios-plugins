@@ -221,7 +221,7 @@ puppet_major_version=$($PUPPET -V|cut -d. -f1)
 # Set Puppet configprint syntax.
 case $puppet_major_version in
   2)
-    puppet_config_print="sudo $PUPPET --configprint"
+    puppet_config_print="sudo $PUPPET config print all"
     ;;
   3)
     puppet_config_print="sudo $PUPPET config print"

@@ -221,7 +221,7 @@ puppet_major_version=$($PUPPET -V|cut -d. -f1)
 # Set Puppet configprint syntax.
 case $puppet_major_version in
   2)
-    puppet_config_print="sudo $PUPPET --configprint"
+    puppet_config_print="sudo $PUPPET config print all"
     ;;
   3)
     puppet_config_print="sudo $PUPPET config print"
@@ -237,7 +237,7 @@ puppet_config_output="$($puppet_config_print)"
 runinterval=$(parse_puppet_config "runinterval")
 splaylimit=0
 splay=$(parse_puppet_config "splay")
-[ "$splay" != "false" ] && splaylimit=$(parse_uppet_config "splaylimit")
+[ "$splay" != "false" ] && splaylimit=$(parse_puppet_config "splaylimit")
 [ -z "$WARN" ] && WARN=$(($runinterval + $splaylimit))
 [ -z "$CRIT" ] && CRIT=$(($WARN + $runinterval))
 #now check we finally have some sensible settings

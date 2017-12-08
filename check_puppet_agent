@@ -86,17 +86,26 @@
 # 20160315  J. Yaworski Add -v, allowing to pass a version to compare
 # 20160815  L. Buriola  Add -E to show first error on output
 # 20170426  benwtr      Detect failure to retrieve catalog from server as a warning.
+# 20171208  F. Coulmier Add -S option to alert if last run showed that file are out of sync. Usefull when
+#                       you run puppet in noop mode
+#                       Also add -W option to return WARNING instead of CRITICAL
 
 # FUNCTIONS
 result () {
+  if [ "$return_warning" -eq 1 ]; then
+    rm='WARNING' ; rc=1
+  else
+    rm='CRITICAL' ; rc=2
+  fi
+
   case $1 in
     0) echo "OK: Puppet agent $version running catalogversion $config, and executed at $last_run_human for last time. $PERF_DATA";rc=0 ;;
     1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete";rc=3 ;;
     2) echo "WARNING: Last run was $time_since_last seconds ago. Warn is $WARN. $PERF_DATA";rc=1 ;;
     3) echo "CRITICAL: Last run was $time_since_last seconds ago. Crit is $CRIT. $PERF_DATA";rc=2 ;;
-    4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
+    4) echo "$rm: Puppet daemon not running or something wrong with process" ;;
     5) echo "UNKNOWN: no WARN or CRIT parameters were sent to this check";rc=3 ;;
-    6) echo "CRITICAL: Last run had 1 or more errors. Check the logs. $FIRST_ERROR $PERF_DATA";rc=2 ;;
+    6) echo "$rm: Last run had 1 or more errors. Check the logs. $FIRST_ERROR $PERF_DATA" ;;
     7) echo "DISABLED: Reason: $(sed -e 's/{"disabled_message":"//' -e 's/"}//' $agent_disabled_lockfile). $PERF_DATA";rc=1 ;;
     8) echo "UNKNOWN: No Puppet executable found";rc=3 ;;
     9) echo "UNKNOWN: Internal error: $2"; rc=3 ;;
@@ -104,6 +113,7 @@ result () {
    11) echo "INFO: Puppet agent is version $version, but should be $wanted_version. $PERF_DATA";rc=0 ;;
    12) echo "UNKNOWN: last_run_report.yaml not found, not readable or incomplete";rc=3 ;;
    13) echo "WARNING: Failed to retrieve catalog on last run.";rc=1 ;;
+   14) echo "WARNING: Node has $_resources_out_of_sync file(s) out of sync with puppet master. $PERF_DATA"; rc=1 ;;
   esac
   exit $rc
 }
@@ -111,14 +121,16 @@ result () {
 usage () {
   echo ""
   echo "USAGE: "
-  echo "  $0 [-c 7200] [-w 3600] [-d 0] [-l agent_disabled_lockfile] [-s lastrunfile] [-r lastrunreport] [-v wanted_version] [-PEh]"
-  echo "    -c Critical threshold (default 7200 seconds)"
-  echo "    -w Warning threshold (default 3600 seconds)"
+  echo "  $0 [-c 7200] [-w 3600] [-d 0] [-l agent_disabled_lockfile] [-s lastrunfile] [-r lastrunreport] [-v wanted_version] [-WPEh]"
+  echo "    -c Critical threshold for time since last run (default 7200 seconds)"
+  echo "    -w Warning threshold for time since last run (default 3600 seconds)"
   echo "    -d 0|1: puppet agent should be a daemon(1) or not (0).(default 1)"
+  echo "    -S 0|1: Alert (1) or not (0) if there are out of sync files.(default 0)"
   echo "    -h Show this help."
   echo "    -l Agent_disabled_lockfile (default: /var/lib/puppet/state/agent_disabled.lock)"
   echo "    -s Lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
   echo "    -r Lastrunreport (default: /var/lib/puppet/state/last_run_report.yaml)"
+  echo "    -W Return WARNING code instead of CRITICAL when last run failed or when daemon is not running"
   echo "    -P Enable perf_data in the output"
   echo "    -E Show first error in the output"
   echo "    -v The version of puppet that should be running"
@@ -153,7 +165,7 @@ get_first_error() {
 }
 
 # SCRIPT
-while getopts "c:d:l:s:r:w:v:PEh" opt; do
+while getopts "c:d:l:s:S:r:w:v:WPEh" opt; do
   case $opt in
     c)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -174,6 +186,14 @@ while getopts "c:d:l:s:r:w:v:PEh" opt; do
     h) usage ;;
     l) agent_disabled_lockfile=$OPTARG ;;
     s) lastrunfile=$OPTARG ;;
+    S)
+      # argument should be 0 or 1
+      if [ $OPTARG -eq 0 -o $OPTARG -eq 1 ]; then
+        outofsync=$OPTARG
+      else
+        usage
+      fi
+    ;;
     r) lastrunreport=$OPTARG ;;
     w)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -182,6 +202,9 @@ while getopts "c:d:l:s:r:w:v:PEh" opt; do
       else
         usage
       fi
+    ;;
+    W)
+      return_warning=1
     ;;
     P)
       PERF=true
@@ -197,6 +220,10 @@ while getopts "c:d:l:s:r:w:v:PEh" opt; do
     ;;
   esac
 done
+
+# Check if return_warning is set, else set default to 0
+[ -n "$return_warning" ] || return_warning=0
+
 
 parse_puppet_config () {
   echo "$puppet_config_output" | while read key value; do
@@ -344,6 +371,13 @@ failed_to_restart=$_resources_failed_to_restart
 # If $wanted_version is set, compare it to the running version
 if [ -n "$wanted_version" -a -n "$version" ]; then
   [ "$wanted_version" != "$version" ] && result 11
+fi
+
+# Check if out of sync was set, else set default to 0.
+[ -n "$outofsync" ] || outofsync=0
+# If there was some out of sync file during last run, return an error
+if [ $outofsync -eq 1 ]; then
+  [ $_resources_out_of_sync -gt 0 ] && result 14
 fi
 
 # If we reached here all is ok.

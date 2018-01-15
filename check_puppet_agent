@@ -38,13 +38,9 @@
 # Sudo required.
 # The user running this script must be allowed using sudo to run puppet config print, e.g. in /etc/sudoers include the 3 lines
 # User_Alias NAGIOS=nagios
-# Cmnd_Alias PUPPETCHECK=/usr/bin/puppet config print --section agent runinterval,\
-#                        /usr/bin/puppet config print --section agent splay,\
-#                        /usr/bin/puppet config print --section agent splaylimit,\
-#                        /usr/bin/puppet config print --section agent agent_disabled_lockfile,\
-#                        /usr/bin/puppet config print --section agent lastrunfile,\
-#                        /usr/bin/puppet config print --section agent lastrunreport,\
-#                        /usr/bin/puppet config print --section agent pidfile
+# Cmnd_Alias PUPPETCHECK=/usr/bin/puppet config print all, \ # puppet 2
+#                        /usr/bin/puppet config print, \ # puppet 3
+#                        /usr/bin/puppet config print --section agent # other puppet version
 # NAGIOS     ALL=NOPASSWD:PUPPETCHECK
 #
 # CHANGELOG:

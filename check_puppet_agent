@@ -308,7 +308,7 @@ if [ -n "$SHOW_ERROR" ] ; then
 fi
 
 # If the last run failed to retrieve the catalog from the server
-grep -q 'message: "Could not retrieve catalog from remote server' $lastrunreport && result 13
+grep -q 'Could not retrieve catalog from remote server' $lastrunreport && result 13
 
 # Check when last run happened.
 last_run=$_time_last_run

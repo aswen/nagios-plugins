@@ -210,7 +210,7 @@ PATH="$PATH:/opt/puppetlabs/bin"
 # Find location of puppet executable.
 PUPPET=$(which puppet) || result 8
 # Check if sudo installed
-which sudo || result 14
+which sudo 1>/dev/null 2>&1 || result 14
 
 # Find out Puppet major version to determine configprint syntax.
 puppet_major_version=$($PUPPET -V|cut -d. -f1)

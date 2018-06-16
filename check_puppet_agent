@@ -149,6 +149,12 @@ get_first_error() {
 }
 
 # SCRIPT
+# Fix home directory if needed
+# On Gentoo otherwise we get
+# UNKNOWN: Internal error: Puppet version unknown from Error: Could not initialize global default settings: Permission denied @ dir_s_mkdir - /root/.puppetlabs
+# this happens because $HOME is not set to the user one
+export HOME=$(eval echo "~$(whoami)")
+#
 while getopts "c:d:l:s:r:w:v:PEh" opt; do
   case $opt in
     c)
@@ -252,6 +258,8 @@ splay=$(parse_puppet_config "splay")
 
 # If the lastrunreport is not given as a param try to find it ourselves.
 [ -z "$lastrunreport" ] && lastrunreport=$(parse_puppet_config "lastrunreport")
+# Check if the lastrunreport is readable
+[ -r "$lastrunreport" ] || result 12
 # Check if state file exists.
 [ -n "$SHOW_ERROR" ] && ( [ -s $lastrunreport -a -r $lastrunreport ] || result 12 )
 

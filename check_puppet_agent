@@ -82,6 +82,7 @@
 # 20160315  J. Yaworski Add -v, allowing to pass a version to compare
 # 20160815  L. Buriola  Add -E to show first error on output
 # 20170426  benwtr      Detect failure to retrieve catalog from server as a warning.
+# 20180324  deric       Discard puppet config error (logging) output
 
 # FUNCTIONS
 result () {
@@ -233,7 +234,7 @@ case $puppet_major_version in
     ;;
 esac
 
-puppet_config_output="$($puppet_config_print)"
+puppet_config_output="$($puppet_config_print 2> /dev/null)"
 # construct WARN and CRIT times based on runinterval plus a safety buffer
 # if they have not already been explicitly set
 runinterval=$(parse_puppet_config "runinterval")

@@ -101,6 +101,7 @@ result () {
    11) echo "INFO: Puppet agent is version $version, but should be $wanted_version. $PERF_DATA";rc=0 ;;
    12) echo "UNKNOWN: last_run_report.yaml not found, not readable or incomplete";rc=3 ;;
    13) echo "WARNING: Failed to retrieve catalog on last run.";rc=1 ;;
+   14) echo "UNKNOWN: No sudo executable found";rc=3 ;;
   esac
   exit $rc
 }
@@ -215,6 +216,8 @@ parse_puppet_config () {
 PATH="$PATH:/opt/puppetlabs/bin"
 # Find location of puppet executable.
 PUPPET=$(which puppet) || result 8
+# Check if sudo installed
+which sudo 1>/dev/null 2>&1 || result 14
 
 # Find out Puppet major version to determine configprint syntax.
 puppet_major_version=$($PUPPET -V|cut -d. -f1)

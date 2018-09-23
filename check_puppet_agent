@@ -36,11 +36,20 @@
 #}
 #
 # Sudo required.
-# The user running this script must be allowed using sudo to run puppet config print, e.g. in /etc/sudoers include the 3 lines
+# The user running this script must be allowed using sudo to run puppet config print,
+# and in newer versions the summary and or report files.  e.g. in /etc/sudoers include
+# at least the the 3 puppet lines and optionally the lines for other puppet locations
+# or the bintools used in this script.
 # User_Alias NAGIOS=nagios
 # Cmnd_Alias PUPPETCHECK=/usr/bin/puppet config print all, \ # puppet 2
 #                        /usr/bin/puppet config print, \ # puppet 3
-#                        /usr/bin/puppet config print --section agent # other puppet version
+#                        /usr/bin/puppet config print, \ --section agent # other puppet version
+#                        /usr/local/sbin/puppet config print --section agent, \ # local install
+#			 /opt/puppetlabs/bin/puppet config print --section agent, \
+#			 /bin/grep     * */state/last_run_*.yaml, \
+#			 /bin/test     * */state/last_run_*.yaml, \
+#			 /usr/bin/test * */state/last_run_*.yaml, \
+#			 /bin/sed      * */state/last_run_*.yaml
 # NAGIOS     ALL=NOPASSWD:PUPPETCHECK
 #
 # CHANGELOG:
@@ -83,12 +92,13 @@
 # 20160815  L. Buriola  Add -E to show first error on output
 # 20170426  benwtr      Detect failure to retrieve catalog from server as a warning.
 # 20180324  deric       Discard puppet config error (logging) output
+# 20180923  B McGonigle Use sudo to read last_run_summary and last_run_report files when necessary.
 
 # FUNCTIONS
 result () {
   case $1 in
     0) echo "OK: Puppet agent $version running catalogversion $config, and executed at $last_run_human for last time. $PERF_DATA";rc=0 ;;
-    1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete";rc=3 ;;
+    1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete. Check your sudo configuration.";rc=3 ;;
     2) echo "WARNING: Last run was $time_since_last seconds ago. Warn is $WARN. $PERF_DATA";rc=1 ;;
     3) echo "CRITICAL: Last run was $time_since_last seconds ago. Crit is $CRIT. $PERF_DATA";rc=2 ;;
     4) echo "CRITICAL: Puppet daemon not running or something wrong with process";rc=2 ;;
@@ -99,7 +109,7 @@ result () {
     9) echo "UNKNOWN: Internal error: $2"; rc=3 ;;
    10) echo "OK (PROBABLY): Puppet agent last successful run $last_run_human (runinterval $runinterval, splay $splay, splaylimit $splay limit) but system has not been up long enough to guarantee a fresh puppet run should have occurred";rc=0 ;;
    11) echo "INFO: Puppet agent is version $version, but should be $wanted_version. $PERF_DATA";rc=0 ;;
-   12) echo "UNKNOWN: last_run_report.yaml not found, not readable or incomplete";rc=3 ;;
+   12) echo "UNKNOWN: last_run_report.yaml not found, not readable or incomplete. Check your sudo configuration.";rc=3 ;;
    13) echo "WARNING: Failed to retrieve catalog on last run.";rc=1 ;;
    14) echo "UNKNOWN: No sudo executable found";rc=3 ;;
   esac
@@ -128,7 +138,7 @@ usage () {
 parse_yaml () {
    local prefix=$2
    local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
-   sed -ne "s|^\($s\):|\1|" \
+   $sudo_summary sed -ne "s|^\($s\):|\1|" \
         -e "s|^\($s\)\($w\)$s:$s[\"']\(.*\)[\"']$s\$|\1$fs\2$fs\3|p" \
         -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $1 |
    awk -F$fs '{
@@ -144,7 +154,7 @@ parse_yaml () {
 
 # Get first error from last_run_report.yaml
 get_first_error() {
-  grep_cmd="/bin/grep -B 3 -A 1"
+  grep_cmd="$sudo_report /bin/grep -B 3 -A 1"
   first_error_time=$($grep_cmd "status: failure" $lastrunreport | grep "time: " | sort -n | head -1)
   first_error=$($grep_cmd "$first_error_time" $lastrunreport | grep "message: " | sed 's/.*message: //' | head -1)
   echo "FIRST_ERROR ($first_error)"
@@ -219,6 +229,10 @@ PUPPET=$(which puppet) || result 8
 # Check if sudo installed
 which sudo 1>/dev/null 2>&1 || result 14
 
+# We'll set these if we need to run sudo to read the summary or report.
+sudo_summary=
+sudo_report=
+
 # Find out Puppet major version to determine configprint syntax.
 puppet_major_version=$($PUPPET -V|cut -d. -f1)
 
@@ -258,14 +272,24 @@ splay=$(parse_puppet_config "splay")
 # If the lastrunfile is not given as a param try to find it ourselves.
 [ -z "$lastrunfile" ] && lastrunfile=$(parse_puppet_config "lastrunfile")
 # Check if state file exists.
-[ -s $lastrunfile -a -r $lastrunfile ] || result 1
+if ( [ ! -s $lastrunfile ] || [ ! -r $lastrunfile ] ); then
+    if ( sudo test -s $lastrunfile && sudo test -r $lastrunfile ); then
+       sudo_summary='sudo'
+    else
+	result 1 if [ -n "$SHOW_ERROR" ]
+    fi
+fi    
 
 # If the lastrunreport is not given as a param try to find it ourselves.
 [ -z "$lastrunreport" ] && lastrunreport=$(parse_puppet_config "lastrunreport")
-# Check if the lastrunreport is readable
-[ -r "$lastrunreport" ] || result 12
-# Check if state file exists.
-[ -n "$SHOW_ERROR" ] && ( [ -s $lastrunreport -a -r $lastrunreport ] || result 12 )
+# Check if lastrunreport exists.
+if ( [ ! -s $lastrunreport ] || [ ! -r $lastrunreport ] ); then
+    if ( sudo test -s $lastrunreport && sudo test -r $lastrunreport ); then
+	sudo_report='sudo'
+    else
+	result 12 if [ -n "$SHOW_ERROR" ]
+    fi
+fi
 
 # Check if daemonized was set, else set default to 1.
 [ -n "$daemonized" ] || daemonized=1
@@ -320,7 +344,7 @@ if [ -n "$SHOW_ERROR" ] ; then
 fi
 
 # If the last run failed to retrieve the catalog from the server
-grep -q 'Could not retrieve catalog from remote server' $lastrunreport && result 13
+$sudo_report grep -q 'Could not retrieve catalog from remote server' $lastrunreport && result 13
 
 # Check when last run happened.
 last_run=$_time_last_run

@@ -88,6 +88,7 @@ result () {
     5) echo "UNKNOWN: Usage: ${me} [-i <bond interface name>] [-p <expected primary interface name>]";rc=3;;
     6) echo "CRITICAL: bondinterface ${if} has no active slaves";rc=2;;
     7) echo "WARNING: Bondingmode: $(grep "Bonding Mode:" /proc/net/bonding/${if}), (unexpected) active link: $2";rc=1;;
+    8) echo "WARNING: bondinterface with name ${if} has less than 2 interfaces - so zero redundancy";rc=1;;
   esac
 }
 
@@ -110,11 +111,24 @@ rc=0
 [ -f "/proc/net/bonding/${if}" ] || result 4
 [ $rc -gt 0 ] && exit $rc
 
+case $(grep "Bonding Mode:" /proc/net/bonding/${if}) in
+  *"IEEE 802.3ad Dynamic link aggregation"*) bondingmode=lacp;;
+  *) bondingmode=masterslave;;
+esac
+
 # Inspect the state of the entire bond interface
-ifstate=$(${AWK} '/Currently Active Slave/ {print $4}' /proc/net/bonding/${if})
-[ "${ifstate}" = "None" ]&& result 6
-[ "${ifstate}" = "${pri}" ] || result 7 "${ifstate}"
-[ $rc -gt 0 ] && exit $rc
+if [ "$bondingmode" == "lacp" ]
+then
+  ifstate=$(${AWK} '/MII Status:/ {print $3}' /proc/net/bonding/bond0 | head -n 1)
+  ifslavecount=$(${AWK} '/Slave Interface:/ {print $3}' /proc/net/bonding/bond0 | wc -l)
+  [ "${ifstate}" != "up" ]&& result 6
+  [ ${ifslavecount} -lt 2 ]&& result 8
+else
+  ifstate=$(${AWK} '/Currently Active Slave/ {print $4}' /proc/net/bonding/${if})
+  [ "${ifstate}" = "None" ]&& result 6
+  [ "${ifstate}" = "${pri}" ] || result 7 "${ifstate}"
+  [ $rc -gt 0 ] && exit $rc
+fi
 
 # test state of each if in bond
 ethdevs=$(${AWK} '/Slave Interface/ {print $3}' /proc/net/bonding/${if})
@@ -129,3 +143,4 @@ done
 exit $rc
 
 #END
+

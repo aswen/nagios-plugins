@@ -87,7 +87,7 @@
 # FUNCTIONS
 result () {
   case $1 in
-    0) echo "OK: Puppet agent $version running catalogversion $config, and executed at $last_run_human for last time. $PERF_DATA";rc=0 ;;
+    0) echo "OK: Puppet agent $version running catalog version $config, and executed at $last_run_human for last time. $PERF_DATA";rc=0 ;;
     1) echo "UNKNOWN: last_run_summary.yaml not found, not readable or incomplete";rc=3 ;;
     2) echo "WARNING: Last run was $time_since_last seconds ago. Warn is $WARN. $PERF_DATA";rc=1 ;;
     3) echo "CRITICAL: Last run was $time_since_last seconds ago. Crit is $CRIT. $PERF_DATA";rc=2 ;;

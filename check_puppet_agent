@@ -144,9 +144,8 @@ parse_yaml () {
 
 # Get first error from last_run_report.yaml
 get_first_error() {
-  grep_cmd="/bin/grep -B 3 -A 1"
-  first_error_time=$($grep_cmd "status: failure" $lastrunreport | grep "time: " | sort -n | head -1)
-  first_error=$($grep_cmd "$first_error_time" $lastrunreport | grep "message: " | sed 's/.*message: //' | head -1)
+  grep_cmd="/bin/grep -B 4 -A 1 -m 1"
+  first_error=$($grep_cmd "status: failure" $lastrunreport | grep -A 2 "message: " | sed -E '/ +message: \|-/d;s/ +message: +//g' | sed -E 's/  +//g')
   echo "FIRST_ERROR ($first_error)"
 }
 

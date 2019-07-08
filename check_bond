@@ -30,6 +30,7 @@
 # This plugin defaults to bond0. If you have multiple bonds you can tell the script so by adding -i <if>.
 # It will also warn if the Currently Active Slave is not the expected primary interface,
 # the default primary interface is eth0, You can override this with -p <if>
+# -p can be a comma separated list like "-p eno49,eno50"
 
 #  if you have dont_blame_nrpe=1 set you can choose to
 #  command[check_bond]=/usr/lib/nagios/plugins/check_bond -i $ARG1$ -p $ARG2$
@@ -53,6 +54,7 @@
 # A.Swen  2011-09-07 Add support for other bond module than bond0 (defaults to bond0 however)
 # A.Swen  2013-10-11 Remove some obsolete stuff and make the script shorter
 # B.Potts 2017-01-16 Check and display expected primary interface on bond
+# J.Guldmyr 2018-09-25 Check for a list of primary interfaces instead of a single one
 #
 #
 # SETTINGS
@@ -122,11 +124,12 @@ then
   ifstate=$(${AWK} '/MII Status:/ {print $3}' /proc/net/bonding/bond0 | head -n 1)
   ifslavecount=$(${AWK} '/Slave Interface:/ {print $3}' /proc/net/bonding/bond0 | wc -l)
   [ "${ifstate}" != "up" ]&& result 6
+  [[ "${pri}" =~ "${ifstate}" ]] || result 7 "${ifstate}"
   [ ${ifslavecount} -lt 2 ]&& result 8
 else
   ifstate=$(${AWK} '/Currently Active Slave/ {print $4}' /proc/net/bonding/${if})
   [ "${ifstate}" = "None" ]&& result 6
-  [ "${ifstate}" = "${pri}" ] || result 7 "${ifstate}"
+  [[ "${pri}" =~ "${ifstate}" ]] || result 7 "${ifstate}"
   [ $rc -gt 0 ] && exit $rc
 fi
 

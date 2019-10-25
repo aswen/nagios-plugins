@@ -100,8 +100,9 @@ result () {
    10) echo "OK (PROBABLY): Puppet agent last successful run $last_run_human (runinterval $runinterval, splay $splay, splaylimit $splay limit) but system has not been up long enough to guarantee a fresh puppet run should have occurred";rc=0 ;;
    11) echo "INFO: Puppet agent is version $version, but should be $wanted_version. $PERF_DATA";rc=0 ;;
    12) echo "UNKNOWN: last_run_report.yaml not found, not readable or incomplete";rc=3 ;;
-   13) echo "WARNING: Failed to retrieve catalog on last run.";rc=1 ;;
+   13) echo "WARNING: Failed to retrieve catalog on last run. $FIRST_ERROR";rc=1 ;;
    14) echo "UNKNOWN: No sudo executable found";rc=3 ;;
+   15) echo "CRITICAL: Uncategorized/Unknown failed or error status detected. $FIRST_ERROR";rc=2 ;;
   esac
   exit $rc
 }
@@ -144,8 +145,8 @@ parse_yaml () {
 
 # Get first error from last_run_report.yaml
 get_first_error() {
-  grep_cmd="/bin/grep -B 4 -A 1 -m 1"
-  first_error=$($grep_cmd "status: failure" $lastrunreport | grep -A 2 "message: " | sed -E '/ +message: \|-/d;s/ +message: +//g' | sed -E 's/  +//g')
+  grep_cmd="/bin/grep -B 4 -A 1 -m 1 -E"
+  first_error=$($grep_cmd "(status: failure|level: +:err)" $lastrunreport | /bin/grep -A 2 "message: " | /bin/sed -E '/ +message: \|-/d;s/ +message: +//g' | /bin/sed -E 's/  +//g')
   echo "FIRST_ERROR ($first_error)"
 }
 
@@ -347,6 +348,8 @@ failed_to_restart=$_resources_failed_to_restart
 [ -z "$last_run" -o -z "$config" -o -z "$version" -o -z "$failed" -o -z "$failure" -o -z "$failed_to_restart" ] && result 1
 # If anything went wrong last run => crit.
 [ $failed -gt 0 -o  $failure -gt 0 -o $failed_to_restart -gt 0 ] && result 6
+# If any uncategorized/unknown error was detected of last run rais an error
+[ -n "$FIRST_ERROR" ] && result 15
 
 # If $wanted_version is set, compare it to the running version
 if [ -n "$wanted_version" -a -n "$version" ]; then

@@ -83,6 +83,7 @@
 # 20160815  L. Buriola  Add -E to show first error on output
 # 20170426  benwtr      Detect failure to retrieve catalog from server as a warning.
 # 20180324  deric       Discard puppet config error (logging) output
+# 20200505  M. Adamo    "grep -v egrep" does not work, because it's translated into "grep -E". Use square brackets to simulate regex
 
 # FUNCTIONS
 result () {
@@ -273,14 +274,14 @@ if [ $daemonized -eq 1 ];then
   # Puppet version 4 changed several paths, determine correct ones
   if [ $puppet_major_version -ge 4 ];then
     puppet_daemon_rundir="puppetlabs"
-    puppet_daemon_regex="/opt/puppetlabs/puppet/bin/ruby /opt/puppetlabs/puppet/bin/puppet"
+    puppet_daemon_regex="/[o]pt/puppetlabs/puppet/bin/ruby /opt/puppetlabs/puppet/bin/puppet"
   else
     puppet_daemon_rundir="puppet"
-    puppet_daemon_regex="/usr(/local)?/bin/ruby[^ ]* /usr(/local)?/s?bin/puppetd?"
+    puppet_daemon_regex="/[u]sr(/local)?/bin/ruby[^ ]* /usr(/local)?/s?bin/puppetd?"
   fi
 
   # Check puppet daemon:
-  [ "$(ps axfww|egrep "$puppet_daemon_regex"|grep -v egrep)" ] || result 4
+  [ "$(ps axfww|egrep "$puppet_daemon_regex")" ] || result 4
 
   uname -a|grep -q BSD && default_pidfile=/var/$puppet_daemon_rundir/run/agent.pid || default_pidfile=/var/run/$puppet_daemon_rundir/agent.pid
   [ -e $default_pidfile ] && pidfile=$default_pidfile || pidfile=$(parse_puppet_config "pidfile")

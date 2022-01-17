@@ -83,6 +83,7 @@
 # 20160815  L. Buriola  Add -E to show first error on output
 # 20170426  benwtr      Detect failure to retrieve catalog from server as a warning.
 # 20180324  deric       Discard puppet config error (logging) output
+# 20210117  Jethro      Check if last run was in the desired (no)op mode.
 
 # FUNCTIONS
 result () {
@@ -102,6 +103,7 @@ result () {
    12) echo "UNKNOWN: last_run_report.yaml not found, not readable or incomplete";rc=3 ;;
    13) echo "WARNING: Failed to retrieve catalog on last run.";rc=1 ;;
    14) echo "UNKNOWN: No sudo executable found";rc=3 ;;
+   15) echo "WARNING: Last run was in not in the desired (no)op mode (noop: $__noop)";rc=1 ;;
   esac
   exit $rc
 }
@@ -115,6 +117,7 @@ usage () {
   echo "    -d 0|1: puppet agent should be a daemon(1) or not (0).(default 1)"
   echo "    -h Show this help."
   echo "    -l Agent_disabled_lockfile (default: /var/lib/puppet/state/agent_disabled.lock)"
+  echo "    -n 0|1: puppet run should be in noop(0) or op(1).(default 1)"
   echo "    -s Lastrunfile (default: /var/lib/puppet/state/last_run_summary.yaml)"
   echo "    -r Lastrunreport (default: /var/lib/puppet/state/last_run_report.yaml)"
   echo "    -P Enable perf_data in the output"
@@ -156,7 +159,7 @@ get_first_error() {
 # this happens because $HOME is not set to the user one
 export HOME=$(eval echo "~$(whoami)")
 #
-while getopts "c:d:l:s:r:w:v:PEh" opt; do
+while getopts "c:d:l:n:s:r:w:v:PEh" opt; do
   case $opt in
     c)
       if ! echo $OPTARG | grep -q "[A-Za-z]" && [ -n "$OPTARG" ]
@@ -176,6 +179,15 @@ while getopts "c:d:l:s:r:w:v:PEh" opt; do
     ;;
     h) usage ;;
     l) agent_disabled_lockfile=$OPTARG ;;
+    n)
+      # argument should be 0 or 1
+      if [ $OPTARG -eq 0 -o $OPTARG -eq 1 ];then
+        noop_mode=$OPTARG
+      else
+        usage
+      fi
+    ;;
+
     s) lastrunfile=$OPTARG ;;
     r) lastrunreport=$OPTARG ;;
     w)
@@ -312,6 +324,15 @@ if [ -n "$PERF" ] ; then
   done
   PERF_DATA="| $PERF_DATA"
 fi
+
+# Check noop_mode
+eval $(parse_yaml $lastrunreport "__")
+# Set noop_mode to 1 if not exist so we check for a OP run by default
+[ -n "$noop_mode" ] || noop_mode=1
+# __noop false means op run and we want a noop run
+[ "${noop_mode}" -eq 0 ] && [ "${__noop}" = 'false' ] && result 15
+# __noop true means noop run and we want a op run
+[ "${noop_mode}" -eq 1 ] && [ "${__noop}" = 'true' ]  && result 15
 
 # Construct FIRST_ERROR using last_run_report.yaml
 if [ -n "$SHOW_ERROR" ] ; then
